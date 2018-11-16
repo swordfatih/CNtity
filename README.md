@@ -3,7 +3,7 @@ CNtity (Chats Noirs Entity) is a header-only helper library for an implementatio
 ***
 **Example code**
 An example code showing how CNtity is maniable!
-```
+```cpp
 //CNtity
 #include "CNtity/Helper.hpp"
 
