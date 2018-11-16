@@ -291,7 +291,7 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     std::unordered_map<Entity, std::vector<std::variant<Component, Components ...>>> mComponents;   ///< Components
-    uint64_t mCount = 0;                                                                                 ///< Entity count
+    uint64_t mCount = 0;                                                                            ///< Entity count
 
 };
 
