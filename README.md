@@ -1,5 +1,5 @@
 # CNtity
-CNtity (Chats Noirs Entity) is a header-only helper library for an implementation of an Entity Component System (ECS) in C++17. It is actually in development by Fatih#6810 (accfldekur@gmail.com) from *Moonlit Black Cats*.
+CNtity (Chats Noirs Entity) is a header-only helper library for an Entity Component System (ECS) implementation using C++17. It is actually in development by Fatih#6810 (accfldekur@gmail.com) from *Moonlit Black Cats*.
 ***
 **Example code**
 
