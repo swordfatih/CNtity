@@ -47,7 +47,6 @@ using Entity = int64_t; ///< Entities are only IDs
 /// Component System architecture
 ///
 ////////////////////////////////////////////////////////////
-
 template <typename Component, typename ... Components>
 class Helper
 {
