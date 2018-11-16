@@ -81,3 +81,16 @@ int main()
     return 0;
 }
 ```
+
+***
+
+Functions | Description
+------- | -----------
+`create()` | Creates an entity with or without components.
+`add()` | Add a component to an entity.
+`remove()` | Remove a component from an entity.
+`get()` | Get a specified component of an entity.
+`has()` | Check if an entity has a specified component.
+`for_each()` | Execute a given function for each entities containing specified components.
+`acquire()` | Get a vector of entities containing specified components.
+`erase()` | Erase an entity.
