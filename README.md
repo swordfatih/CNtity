@@ -43,7 +43,7 @@ int main()
     //Creating entities
     CNtity::Entity chat = helper.create<Identity>({"chat"});
     helper.create<Identity>({"chien"});
-    helper.create<Identity>({"velociraptor"});
+    helper.create<Identity, Position>({"velociraptor", {25, 70});
 
     //Adding component, changing values
     Position* position = helper.add<Position>(chat, {50, 50});
