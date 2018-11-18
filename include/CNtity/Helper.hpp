@@ -36,7 +36,7 @@
 #include <variant>
 #include <functional>
 #include <typeindex>
-#include <iostream>
+#include <algorithm>
 
 namespace CNtity
 {
@@ -98,7 +98,7 @@ public:
 
         if constexpr (sizeof...(Types) != 0)
         {
-            mComponents[std::type_index(typeid(Types)...)].insert(std::make_pair(mCountEntity, types ...));
+            mComponents[std::type_index(typeid(Types)...)].emplace(std::make_pair(mCountEntity, types ...));
         }
 
         return mCountEntity;
@@ -170,14 +170,6 @@ public:
         return false;
     }
 
-    void smallest(std::type_index& component, const std::type_index& type)
-    {
-        if(mComponents[type].size() < mComponents[component].size())
-        {
-            component = type;
-        }
-    }
-
     ////////////////////////////////////////////////////////////
     /// \brief Execute a function for every entities that
     /// contain specified components
@@ -239,7 +231,7 @@ public:
 
             for(const auto& entity: mComponents[typeid(Type)])
             {
-                if(mComponents[std::type_index(typeid(Types)...)].count(entity) > 0)
+                if(mComponents[std::type_index(typeid(Types)...)].count(entity.first) > 0)
                 {
                     entities.emplace_back(entity.first);
                 }
@@ -264,6 +256,19 @@ public:
     }
 
 private:
+    ////////////////////////////////////////////////////////////
+    /// \brief Compare a component to another on the amount of
+    /// entities containing them
+    ///
+    ////////////////////////////////////////////////////////////
+    void smallest(std::type_index& component, const std::type_index& type)
+    {
+        if(mComponents[type].size() < mComponents[component].size())
+        {
+            component = type;
+        }
+    }
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
