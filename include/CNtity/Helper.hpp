@@ -31,10 +31,12 @@
 ////////////////////////////////////////////////////////////
 //Standard
 #include <cstdint>
-#include <unordered_map>
+#include "CNtity/tsl/hopscotch_map.h"
 #include <vector>
 #include <variant>
 #include <functional>
+#include <typeindex>
+#include <iostream>
 
 namespace CNtity
 {
@@ -77,10 +79,7 @@ public:
     ////////////////////////////////////////////////////////////
     Entity create()
     {
-        ++mCount;
-        mComponents[mCount];
-
-        return mCount;
+        return ++mCountEntity;
     }
 
     ////////////////////////////////////////////////////////////
@@ -93,33 +92,33 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Entity create(Type type, Types ... types)
+    Entity create(const Type& type, const Types& ... types)
     {
-        ++mCount;
-        mComponents[mCount].push_back(type);
+        mComponents[typeid(Type)][++mCountEntity] = type;
 
         if constexpr (sizeof...(Types) != 0)
         {
-            mComponents[mCount].push_back(types ...);
+            mComponents[std::type_index(typeid(Types)...)].insert(std::make_pair(mCountEntity, types ...));
         }
 
-        return mCount;
+        return mCountEntity;
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Add a component to a specified entity
+    /// \brief Add components to a specified entity
     ///
     /// \param entity Entity
     /// \param type Component
     ///
+    /// \return Pointer to the added component
+    ///
     ////////////////////////////////////////////////////////////
     template <typename Type>
-    Type* add(Entity entity, Type type)
+    Type* add(Entity entity, const Type& type)
     {
-        mComponents.at(entity).push_back(type);
-        return &std::get<Type>(mComponents.at(entity).back());
+        mComponents[typeid(Type)][entity] = type;
 
-        return nullptr;
+        return get<Type>(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -131,19 +130,7 @@ public:
     template <typename Type>
     void remove(Entity entity)
     {
-        if(has<Type>(entity))
-        {
-            for(auto& it: mComponents.at(entity))
-            {
-                int i = &it - &mComponents.at(entity)[0];
-
-                if(std::holds_alternative<Type>(it))
-                {
-                    mComponents.at(entity).erase(mComponents.at(entity).begin() + i);
-                    return;
-                }
-            }
-        }
+        mComponents[typeid(Type)].erase(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -151,19 +138,13 @@ public:
     ///
     /// \param entity Entity
     ///
+    /// \return Pointer to the component
+    ///
     ////////////////////////////////////////////////////////////
     template <typename Type>
     Type* get(Entity entity)
     {
-        for(auto& it: mComponents.at(entity))
-        {
-            if(auto component = std::get_if<Type>(&it))
-            {
-                return component;
-            }
-        }
-
-        return nullptr;
+        return std::get_if<Type>(&mComponents[typeid(Type)].at(entity));
     }
 
     ////////////////////////////////////////////////////////////
@@ -171,40 +152,30 @@ public:
     ///
     /// \param entity Entity
     ///
+    /// \return True if the entity has the component
+    ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
     bool has(Entity entity)
     {
-
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto& it: mComponents.at(entity))
-            {
-                if(std::holds_alternative<Type>(it))
-                {
-                    return true;
-                }
-            }
+            return mComponents[typeid(Type)].count(entity) > 0;
         }
         else
         {
-            uint16_t size = sizeof...(Types);
-
-            for(auto& it: mComponents.at(entity))
-            {
-                if(std::holds_alternative<Type>(it) || std::holds_alternative<Types ...>(it))
-                {
-                    --size;
-                }
-
-                if(size == 0)
-                {
-                    return true;
-                }
-            }
+            return mComponents[typeid(Type)].count(entity) > 0 && mComponents[std::type_index(typeid(Types)...)].count(entity) > 0;
         }
 
         return false;
+    }
+
+    void smallest(std::type_index& component, const std::type_index& type)
+    {
+        if(mComponents[type].size() < mComponents[component].size())
+        {
+            component = type;
+        }
     }
 
     ////////////////////////////////////////////////////////////
@@ -219,21 +190,21 @@ public:
     {
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto& [entity, components]: mComponents)
+            for(auto [entity, component]: mComponents[typeid(Type)])
             {
-                if(has<Type>(entity))
-                {
-                    func(entity, get<Type>(entity));
-                }
+                func(entity, &std::get<Type>(component));
             }
         }
         else
         {
-            for(auto& [entity, components]: mComponents)
+            std::type_index type(typeid(Type));
+            smallest(type, std::type_index(typeid(Types)...));
+
+            for(auto [entity, component]: mComponents[type])
             {
-                if(has<Type, Types ...>(entity))
+                if(mComponents[std::type_index(typeid(Types)...)].count(entity) > 0)
                 {
-                    func(entity, get<Type>(entity));
+                    func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
                 }
             }
         }
@@ -243,7 +214,7 @@ public:
     /// \brief Acquire entities that contains specified
     /// components
     ///
-    /// \return Vector of entity containing specified components
+    /// \return Vector of entities that contain specified components
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
@@ -253,21 +224,24 @@ public:
 
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto& [entity, components]: mComponents)
+            entities.reserve(mComponents[typeid(Type)].size());
+            for(const auto& entity: mComponents[typeid(Type)])
             {
-                if(has<Type, Types ...>(entity))
-                {
-                    entities.push_back(entity);
-                }
+                entities.emplace_back(entity.first);
             }
         }
         else
         {
-            for(auto& [entity, components]: mComponents)
+            std::type_index type(typeid(Type));
+            smallest(type, std::type_index(typeid(Types)...));
+
+            entities.reserve(mComponents[type].size());
+
+            for(const auto& entity: mComponents[typeid(Type)])
             {
-                if(has<Type, Types ...>(entity))
+                if(mComponents[std::type_index(typeid(Types)...)].count(entity) > 0)
                 {
-                    entities.push_back(entity);
+                    entities.emplace_back(entity.first);
                 }
             }
         }
@@ -283,15 +257,18 @@ public:
     ////////////////////////////////////////////////////////////
     void erase(Entity entity)
     {
-        mComponents.erase(entity);
+        for(auto [component, entities]: mComponents)
+        {
+            entities.erase(entity);
+        }
     }
 
 private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unordered_map<Entity, std::vector<std::variant<Component, Components ...>>> mComponents;   ///< Components
-    uint64_t mCount = 0;                                                                            ///< Entity count
+    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
+    uint64_t                                                                                                    mCountEntity = 0;   ///< Entity count
 
 };
 
