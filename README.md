@@ -87,14 +87,14 @@ int main()
 
 Functions | Description
 ------- | -----------
-`create()` | Creates an entity with or without components.
-`add()` | Add a component to an entity.
-`remove()` | Remove a component from an entity.
-`get()` | Get a specified component of an entity.
-`has()` | Check if an entity has a specified component.
-`for_each()` | Execute a given function for each entities containing specified components.
-`acquire()` | Get a vector of entities containing specified components.
-`erase()` | Erase an entity.
+`create<Component>()` | Creates an entity with or without components.
+`add<Component>(entity)` | Add a component to an entity.
+`remove<Component>(entity)` | Remove a component from an entity.
+`get<Component>(entity)` | Get a specified component of an entity.
+`has<Component>(entity)` | Check if an entity has a specified component.
+`erase(entity)` | Erase an entity.
+`for_each<Component>(function)` | Execute a given function for each entities containing specified components.
+`acquire<Component>()` | Get a vector of entities containing specified components.
 
 ***
 
