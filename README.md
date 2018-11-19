@@ -89,7 +89,7 @@ int main()
 
 ***
 
-### How to use
+### Help
 
 Many functions you need for your ECS is provided by the helper. 
 
@@ -106,7 +106,7 @@ Functions | Description
 
 ***
 
-### How to use
+### Performances
 
 I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code. 
 
