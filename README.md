@@ -85,6 +85,8 @@ int main()
 
 ***
 
+Many functions you need for your ECS is provided by the helper. 
+
 Functions | Description
 ------- | -----------
 `create<Component>()` | Creates an entity with or without components.
