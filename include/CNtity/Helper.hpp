@@ -36,7 +36,6 @@
 #include <variant>
 #include <functional>
 #include <typeindex>
-#include <algorithm>
 
 namespace CNtity
 {
