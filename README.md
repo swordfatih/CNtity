@@ -106,17 +106,17 @@ I have tried to make CNtity as fast as I could! Here is a little benchmark I hav
 
 |   | Entities | Iterations | Probability | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| CNtity | 1'000 | 100 | 3 |  |  |  |  |
-| EntityX | 1'000 | 100 | 3 |  |  | X | X |
-| CNtity | 1'000 | 1'000'000 | 3 |  |  |  |  |
-| EntityX | 1'000 | 1'000'000 | 3 |  |  | X | X |
-| CNtity | 10'000 | 1'000'000 | 3 |  |  |  |  |
-| EntityX | 10'000 | 1'000'000 | 3 |  |  | X | X |
-| CNtity | 30'000 | 100'000 | 3 |  |  |  |  |
-| EntityX | 30'000 | 100'000 | 3 |  |  | X | X |
-| CNtity | 100'000 | 100'000 | 5 |  |  |  |  |
-| EntityX | 100'000 | 100'000 | 5 |  |  | X | X |
-| CNtity | 10'000 | 1'000'000 | 1'000 |  |  |  |  |
-| EntityX | 10'000 | 1'000'000 | 1'000 |  |  | X | X |
-| CNtity | 100'000 | 1'000'000 | 1'000 |  |  |  |  |
-| EntityX | 100'000 | 1'000'000 | 1'000 |  |  | X | X |
+| CNtity | 1'000 | 100 | 3 | 0 ms | 0 ms | 0 ms | 0 ms |
+| EntityX | 1'000 | 100 | 3 | 0 ms | 1 ms | X | X |
+| CNtity | 1'000 | 1'000'000 | 3 | 2'523 ms | 6'117 ms | 5'333 ms | 5'156 ms |
+| EntityX | 1'000 | 1'000'000 | 3 | 11'738 ms | 22'208 ms | X | X |
+| CNtity | 10'000 | 1'000'000 | 3 | 23'081 ms | 60'542 ms | 53'160 ms | 51'339 ms |
+| EntityX | 10'000 | 1'000'000 | 3 | 113'041 ms | 219'806 ms | X | X |
+| CNtity | 30'000 | 100'000 | 3 | 7'627 ms | 18'743 ms | 16'038 ms | 15'480 ms |
+| EntityX | 30'000 | 100'000 | 3 | 33'709 ms | 67'798 ms | X | X |
+| CNtity | 100'000 | 100'000 | 5 | 15'195 ms | 36'691 ms | 32'948 ms | 31'123 ms |
+| EntityX | 100'000 | 100'000 | 5 | 72'244 ms | 145'751 ms | X | X |
+| CNtity | 10'000 | 1'000'000 | 1'000 | 136 ms | 243 ms | 278 ms | 288 ms |
+| EntityX | 10'000 | 1'000'000 | 1'000 | 9'160 ms | 8'377 ms | X | X |
+| CNtity | 100'000 | 1'000'000 | 1'000 | 790 ms | 2'205 ms | 2'053 ms | 2'018 ms |
+| EntityX | 100'000 | 1'000'000 | 1'000 | 94'978 ms | 86'477 ms | X | X |
