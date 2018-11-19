@@ -91,7 +91,7 @@ int main()
 
 ### Help
 
-Many functions you need for your ECS is provided by the helper. 
+Many functions you need for your ECS is provided in the helper class. 
 
 Functions | Description
 ------- | -----------
