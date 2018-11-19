@@ -101,6 +101,11 @@ public:
             mComponents[std::type_index(typeid(Types)...)].emplace(std::make_pair(mCountEntity, types ...));
         }
 
+        if(!mGroupings.empty())
+        {
+            mGroupings.clear();
+        }
+
         return mCountEntity;
     }
 
@@ -117,6 +122,11 @@ public:
     Type* add(Entity entity, const Type& type)
     {
         mComponents[typeid(Type)][entity] = type;
+
+        if(!mGroupings.empty())
+        {
+            mGroupings.clear();
+        }
 
         return get<Type>(entity);
     }
@@ -189,12 +199,29 @@ public:
         }
         else
         {
-            std::type_index type(typeid(Type));
-            smallest(type, std::type_index(typeid(Types)...));
-
-            for(auto [entity, component]: mComponents[type])
+            if(mGroupings.count(1 << std::type_index(typeid(Types)...).hash_code()) == 0)
             {
-                if(mComponents[std::type_index(typeid(Types)...)].count(entity) > 0)
+                auto& grouping = mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
+
+                std::type_index type(typeid(Type));
+                smallest(type, std::type_index(typeid(Types)...));
+
+                grouping.reserve(mComponents[type].size());
+
+                auto& components = mComponents[std::type_index(typeid(Types)...)];
+
+                for(auto [entity, component]: mComponents[type])
+                {
+                    if(components.count(entity) > 0)
+                    {
+                        func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
+                        grouping.emplace_back(entity);
+                    }
+                }
+            }
+            else
+            {
+                for(auto entity: mGroupings[1 << std::type_index(typeid(Types)...).hash_code()])
                 {
                     func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
                 }
@@ -216,25 +243,52 @@ public:
 
         if constexpr (sizeof...(Types) == 0)
         {
-            entities.reserve(mComponents[typeid(Type)].size());
-            for(const auto& entity: mComponents[typeid(Type)])
+            if(mGroupings.count(1 << std::type_index(typeid(Type)).hash_code()) == 0)
             {
-                entities.emplace_back(entity.first);
+                auto& grouping = mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
+
+                entities.reserve(mComponents[typeid(Type)].size());
+
+                for(const auto& entity: mComponents[typeid(Type)])
+                {
+                    entities.emplace_back(entity.first);
+                }
+
+                grouping.reserve(entities.size());
+                grouping = entities;
+            }
+            else
+            {
+                return mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
             }
         }
         else
         {
-            std::type_index type(typeid(Type));
-            smallest(type, std::type_index(typeid(Types)...));
-
-            entities.reserve(mComponents[type].size());
-
-            for(const auto& entity: mComponents[typeid(Type)])
+            if(mGroupings.count(1 << std::type_index(typeid(Types)...).hash_code()) == 0)
             {
-                if(mComponents[std::type_index(typeid(Types)...)].count(entity.first) > 0)
+                auto& grouping = mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
+
+                std::type_index type(typeid(Type));
+                smallest(type, std::type_index(typeid(Types)...));
+
+                entities.reserve(mComponents[type].size());
+
+                auto& components = mComponents[std::type_index(typeid(Types)...)];
+
+                for(const auto& entity: mComponents[typeid(Type)])
                 {
-                    entities.emplace_back(entity.first);
+                    if(components.count(entity.first) > 0)
+                    {
+                        entities.emplace_back(entity.first);
+                    }
                 }
+
+                grouping.reserve(entities.size());
+                grouping = entities;
+            }
+            else
+            {
+                return mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
             }
         }
 
@@ -273,6 +327,7 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
+    tsl::hopscotch_map<uint32_t, std::vector<Entity>>                                                           mGroupings;         ///< Groupings
     uint64_t                                                                                                    mCountEntity = 0;   ///< Entity count
 
 };
