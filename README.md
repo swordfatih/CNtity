@@ -85,6 +85,8 @@ int main()
 
 ***
 
+**Help**
+
 Many functions you need for your ECS is provided by the helper. 
 
 Functions | Description
