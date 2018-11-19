@@ -35,32 +35,26 @@ struct Health
 };
 
 ////////////////////////////////////////////////////////////
-struct Identity
-{
-    std::string name;
-};
-
-////////////////////////////////////////////////////////////
 int main()
 {
     //Helper
-    CNtity::Helper<Position, Velocity, Health, Identity> helper;
+    CNtity::Helper<Position, Velocity, Health, std::string> helper;
 
     //Creating entities
-    CNtity::Entity chat = helper.create<Identity>({"chat"});
-    helper.create<Identity>({"chien"});
-    helper.create<Identity, Position>({"velociraptor"}, {25, 70});
+    auto chat = helper.create<std::string>({"chat"});
+    helper.create<std::string>({"chien"});
+    helper.create<std::string, Position>({"velociraptor"}, {25, 70});
 
     //Adding component, changing values
-    Position* position = helper.add<Position>(chat, {50, 50});
+    auto position = helper.add<Position>(chat, {50, 50});
     position->x += 50;
 
     //System 1
-    helper.for_each<Identity, Position>([&helper](CNtity::Entity entity, Identity* identity)
+    helper.for_each<std::string, Position>([&helper](auto entity, auto identity)
     {
-        if(identity->name == "chat")
+        if(*identity == "chat")
         {
-            Position* position = helper.get<Position>(entity);
+            auto position = helper.get<Position>(entity);
             position->x = 200;
             position->y = 70;
 
@@ -69,11 +63,11 @@ int main()
     });
 
     //System 2
-    for(auto it: helper.acquire<Identity, Position>())
+    for(const auto& it: helper.acquire<std::string, Position>())
     {
-        if(helper.get<Identity>(it)->name == "chat")
+        if(*helper.get<std::string>(it) == "chat")
         {
-            Position* position = helper.get<Position>(it);
+            auto position = helper.get<Position>(it);
             position->x = 200;
             position->y = 70;
         }
