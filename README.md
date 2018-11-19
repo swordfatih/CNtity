@@ -108,7 +108,7 @@ Functions | Description
 
 ### Performances
 
-I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code. 
+I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code. 
 
 *\*will do it again with my gamer setup*
 
