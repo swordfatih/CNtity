@@ -41,7 +41,7 @@ namespace CNtity
 {
 
 ////////////////////////////////////////////////////////////
-using Entity = int64_t; ///< Entities are only IDs
+using Entity = uint64_t; ///< Entities are only IDs
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
