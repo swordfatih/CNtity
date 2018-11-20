@@ -81,15 +81,6 @@ public:
         return ++mCountEntity;
     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Create entity with components
-    ///
-    /// \param type Components
-    /// \param types Components
-    ///
-    /// \return Created entity
-    ///
-    ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
     Entity create(const Type& type, const Types& ... types)
     {
@@ -97,7 +88,7 @@ public:
 
         if constexpr (sizeof...(Types) != 0)
         {
-            mComponents[std::type_index(typeid(Types)...)].emplace(std::make_pair(mCountEntity, types ...));
+            emplace_variadic<Type, Types ...>(type, types ...);
         }
 
         if(!mGroupings.empty())
@@ -173,7 +164,7 @@ public:
         }
         else
         {
-            return mComponents[typeid(Type)].count(entity) > 0 && mComponents[std::type_index(typeid(Types)...)].count(entity) > 0;
+            return mComponents[typeid(Type)].count(entity) > 0 && (mComponents[typeid(Types)].count(entity), ...);
         }
 
         return false;
@@ -198,16 +189,17 @@ public:
         }
         else
         {
-            if(mGroupings.count(1 << std::type_index(typeid(Types)...).hash_code()) == 0)
+            uint_least32_t mask = bitmask<Type, Types...>();
+            if(mGroupings.count(mask) == 0)
             {
-                auto& grouping = mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
+                auto& grouping = mGroupings[mask];
 
                 std::type_index type(typeid(Type));
-                smallest(type, std::type_index(typeid(Types)...));
+                smallest<Type, Types...>(type);
 
                 grouping.reserve(mComponents[type].size());
 
-                auto& components = mComponents[std::type_index(typeid(Types)...)];
+                auto& components = (mComponents[typeid(Types)], ...);
 
                 for(auto [entity, component]: mComponents[type])
                 {
@@ -220,7 +212,7 @@ public:
             }
             else
             {
-                for(auto entity: mGroupings[1 << std::type_index(typeid(Types)...).hash_code()])
+                for(const auto& entity: mGroupings[mask])
                 {
                     func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
                 }
@@ -244,8 +236,6 @@ public:
         {
             if(mGroupings.count(1 << std::type_index(typeid(Type)).hash_code()) == 0)
             {
-                auto& grouping = mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
-
                 entities.reserve(mComponents[typeid(Type)].size());
 
                 for(const auto& entity: mComponents[typeid(Type)])
@@ -253,6 +243,7 @@ public:
                     entities.emplace_back(entity.first);
                 }
 
+                auto& grouping = mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
                 grouping.reserve(entities.size());
                 grouping = entities;
             }
@@ -263,16 +254,15 @@ public:
         }
         else
         {
-            if(mGroupings.count(1 << std::type_index(typeid(Types)...).hash_code()) == 0)
+            uint_least32_t mask = bitmask<Type, Types...>();
+            if(mGroupings.count(mask) == 0)
             {
-                auto& grouping = mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
-
                 std::type_index type(typeid(Type));
-                smallest(type, std::type_index(typeid(Types)...));
+                smallest<Type, Types...>(type);
 
                 entities.reserve(mComponents[type].size());
 
-                auto& components = mComponents[std::type_index(typeid(Types)...)];
+                auto& components = (mComponents[typeid(Types)], ...);
 
                 for(const auto& entity: mComponents[typeid(Type)])
                 {
@@ -282,12 +272,13 @@ public:
                     }
                 }
 
+                auto& grouping = mGroupings[mask];
                 grouping.reserve(entities.size());
                 grouping = entities;
             }
             else
             {
-                return mGroupings[1 << std::type_index(typeid(Types)...).hash_code()];
+                return mGroupings[mask];
             }
         }
 
@@ -310,16 +301,63 @@ public:
 
 private:
     ////////////////////////////////////////////////////////////
-    /// \brief Compare a component to another on the amount of
-    /// entities containing them
+    /// \brief Compare components on the amount of entities
+    /// containing them
     ///
     ////////////////////////////////////////////////////////////
-    void smallest(std::type_index& component, const std::type_index& type)
+    template <typename Type, typename ... Types>
+    void smallest(std::type_index& component)
     {
-        if(mComponents[type].size() < mComponents[component].size())
+        if(mComponents[typeid(Type)].size() < mComponents[component].size())
         {
-            component = type;
+            component = typeid(Type);
         }
+
+        if constexpr (sizeof...(Types) != 0)
+        {
+            smallest<Types ...>(component);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Add several components to the entities
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Type, typename ... Types>
+    void emplace_variadic(const Type& type, const Types& ... types)
+    {
+        mComponents[typeid(Type)].emplace(std::make_pair(mCountEntity, type));
+
+        if constexpr (sizeof...(Types) != 0)
+        {
+            emplace_variadic<Types ...>(types ...);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Create a bitmask with components
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Type, typename ... Types>
+    uint_least32_t bitmask()
+    {
+        std::vector<uint_least32_t> hashCodes;
+        hashCodes.reserve(sizeof...(Types) + 1);
+
+        hashCodes.push_back(std::type_index(typeid(Type)).hash_code());
+
+        if(sizeof...(Types) != 0)
+        {
+            (hashCodes.push_back(std::type_index(typeid(Types)).hash_code()), ...);
+        }
+
+        uint_least32_t mask = 0;
+        for(const auto& it: hashCodes)
+        {
+            mask |= (1 << it);
+        }
+
+        return mask;
     }
 
     ////////////////////////////////////////////////////////////
