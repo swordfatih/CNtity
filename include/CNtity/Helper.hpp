@@ -81,6 +81,15 @@ public:
         return ++mCountEntity;
     }
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Create entity with components
+    ///
+    /// \param type Component
+    /// \param types Components
+    ///
+    /// \return Created entity
+    ///
+    ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
     Entity create(const Type& type, const Types& ... types)
     {
