@@ -8,7 +8,7 @@ CNtity is header-only, you just need a compiler that supports C++17 and to inclu
 
 **Example code**
 
-An example code showing how CNtity is maniable!
+An example code showing how maniable CNtity is!
 ```cpp
 //CNtity
 #include "CNtity/Helper.hpp"
