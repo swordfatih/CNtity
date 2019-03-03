@@ -191,9 +191,9 @@ public:
     {
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto [entity, component]: mComponents[typeid(Type)])
+            for(auto& [entity, component]: mComponents[typeid(Type)])
             {
-                func(entity, &std::get<Type>(component));
+                func(entity, const_cast<Type*>(&std::get<Type>(component)));
             }
         }
         else
@@ -210,7 +210,7 @@ public:
 
                 auto& components = (mComponents[typeid(Types)], ...);
 
-                for(auto [entity, component]: mComponents[type])
+                for(auto& [entity, component]: mComponents[type])
                 {
                     if(components.count(entity) > 0)
                     {
