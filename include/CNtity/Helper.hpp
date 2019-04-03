@@ -36,6 +36,7 @@
 #include <variant>
 #include <functional>
 #include <typeindex>
+#include <algorithm>
 
 namespace CNtity
 {
@@ -305,6 +306,15 @@ public:
         for(auto [component, entities]: mComponents)
         {
             entities.erase(entity);
+        }
+
+        for(auto [group, entities]: mGroupings)
+        {
+            auto position = std::find(entities.begin(), entities.end(), entity);
+            if(position != entities.end())
+            {
+                entities.erase(position);
+            }
         }
     }
 
