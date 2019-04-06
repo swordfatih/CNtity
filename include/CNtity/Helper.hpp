@@ -303,17 +303,17 @@ public:
     ////////////////////////////////////////////////////////////
     void erase(Entity entity)
     {
-        for(auto [component, entities]: mComponents)
+        for(auto& [component, entities]: mComponents)
         {
-            entities.erase(entity);
+            const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(entities).erase(entity);
         }
 
-        for(auto [group, entities]: mGroupings)
+        for(auto& [group, entities]: mGroupings)
         {
             auto position = std::find(entities.begin(), entities.end(), entity);
             if(position != entities.end())
             {
-                entities.erase(position);
+                const_cast<std::vector<Entity>&>(entities).erase(position);
             }
         }
     }
