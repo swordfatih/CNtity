@@ -209,11 +209,9 @@ public:
 
                 grouping.reserve(mComponents[type].size());
 
-                auto& components = (mComponents[typeid(Types)], ...);
-
                 for(auto& [entity, component]: mComponents[type])
                 {
-                    if(components.count(entity) > 0)
+                    if(has<Type, Types...>(entity))
                     {
                         func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
                         grouping.emplace_back(entity);
@@ -272,11 +270,9 @@ public:
 
                 entities.reserve(mComponents[type].size());
 
-                auto& components = (mComponents[typeid(Types)], ...);
-
                 for(const auto& entity: mComponents[typeid(Type)])
                 {
-                    if(components.count(entity.first) > 0)
+                    if(has<Type, Types...>(entity.first))
                     {
                         entities.emplace_back(entity.first);
                     }
