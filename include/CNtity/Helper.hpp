@@ -137,10 +137,15 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    template <typename Type>
+    template <typename Type, typename ... Types>
     void remove(Entity entity)
     {
         mComponents[typeid(Type)].erase(entity);
+
+        if constexpr (sizeof...(Types) != 0)
+        {
+            (mComponents[typeid(Types)].erase(entity), ...);
+        }
     }
 
     ////////////////////////////////////////////////////////////
