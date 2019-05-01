@@ -118,10 +118,20 @@ public:
     /// \return Pointer to the added component
     ///
     ////////////////////////////////////////////////////////////
-    template <typename Type>
-    Type* add(Entity entity, const Type& type)
+    template <typename Type, typename ... Types>
+    Type* add(Entity entity, const Type& type, const Types& ... types)
     {
         mComponents[typeid(Type)][entity] = type;
+
+        if constexpr (sizeof...(Types) != 0)
+        {
+            auto assign = [&](const auto& component)
+            {
+                mComponents[typeid(component)][entity] = component;
+            };
+
+            (assign(types), ...);
+        }
 
         if(!mGroupings.empty())
         {
