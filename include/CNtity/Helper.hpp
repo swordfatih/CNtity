@@ -133,10 +133,7 @@ public:
             (assign(types), ...);
         }
 
-        if(!mGroupings.empty())
-        {
-            mGroupings.clear();
-        }
+        mGroupings.clear();
 
         return get<Type>(entity);
     }
@@ -156,6 +153,8 @@ public:
         {
             (mComponents[typeid(Types)].erase(entity), ...);
         }
+
+        mGroupings.clear();
     }
 
     ////////////////////////////////////////////////////////////
