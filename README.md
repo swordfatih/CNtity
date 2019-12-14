@@ -89,6 +89,7 @@ Many functions you need for your ECS are provided in the helper class.
 
 Functions | Description
 ------- | -----------
+`components()` | Get registered components.
 `create<Component>()` | Creates an entity with or without components.
 `add<Component>(entity)` | Add a component to an entity.
 `remove<Component>(entity)` | Remove a component from an entity.
