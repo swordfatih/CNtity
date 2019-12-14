@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
 // CNtity - Chats Noirs Entity Component System Helper
-// Copyright (c) 2018 Fatih (accfldekur@gmail.com)
+// Copyright (c) 2018 - 2019 Fatih (accfldekur@gmail.com)
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
