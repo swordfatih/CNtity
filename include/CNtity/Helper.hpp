@@ -74,6 +74,22 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get registered components
+    ///
+    /// \return type_index of every registered components
+    ///
+    ////////////////////////////////////////////////////////////
+    std::vector<std::type_index> components()
+    {
+        std::vector<std::type_index> indeces;
+
+        indeces.push_back(std::type_index(typeid(Component)));
+        (indeces.push_back(std::type_index(typeid(Components))), ...);
+
+        return indeces;
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Create entity without any component
     ///
     /// \return Created entity
