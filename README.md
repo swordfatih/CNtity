@@ -85,7 +85,7 @@ int main()
 
 ### Help
 
-Many functions you need for your ECS are provided in the helper class. 
+Many functions you need for your ECS are provided in the helper class.
 
 Functions | Description
 ------- | -----------
@@ -93,6 +93,7 @@ Functions | Description
 `add<Component>(entity)` | Add a component to an entity.
 `remove<Component>(entity)` | Remove a component from an entity.
 `get<Component>(entity)` | Get a specified component of an entity.
+`retrieve(entity)` | Retrieve pointers on every components associated to a specified entity.
 `has<Component>(entity)` | Check if an entity has a specified component.
 `erase(entity)` | Erase an entity.
 `for_each<Component>(function)` | Execute a given function for each entities containing specified components.
@@ -102,7 +103,7 @@ Functions | Description
 
 ### Performances
 
-I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code. 
+I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
 
 *\*will do it again with my gamer setup*
 

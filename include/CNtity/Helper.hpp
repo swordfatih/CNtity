@@ -31,12 +31,14 @@
 ////////////////////////////////////////////////////////////
 //Standard
 #include <cstdint>
-#include "CNtity/tsl/hopscotch_map.h"
 #include <vector>
 #include <variant>
 #include <functional>
 #include <typeindex>
 #include <algorithm>
+
+//tsl
+#include "CNtity/tsl/hopscotch_map.h"
 
 namespace CNtity
 {
@@ -169,6 +171,31 @@ public:
     Type* get(Entity entity)
     {
         return std::get_if<Type>(&mComponents[typeid(Type)].at(entity));
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Retrieve every components associated to a specified
+    /// entity
+    ///
+    /// \param entity Entity
+    ///
+    /// \return Pointers to every components associated to the
+    /// entity
+    ///
+    ////////////////////////////////////////////////////////////
+    std::vector<std::variant<Component, Components ...>*> retrieve(Entity entity)
+    {
+        std::vector<std::variant<Component, Components ...>*> components;
+
+        for(auto& [component, entities]: mComponents)
+        {
+            if(entities.count(entity) > 0)
+            {
+                components.push_back(const_cast<std::variant<Component, Components ...>*>(&entities.at(entity)));
+            }
+        }
+
+        return components;
     }
 
     ////////////////////////////////////////////////////////////
