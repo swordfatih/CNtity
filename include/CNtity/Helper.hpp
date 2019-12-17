@@ -76,17 +76,18 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get registered components
     ///
-    /// \return type_index of every registered components
+    /// \return type_index of every registered components in an
+    /// array
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<std::type_index> components()
+    std::vector<std::type_index> components() const
     {
-        std::vector<std::type_index> indeces;
+        std::vector<std::type_index> indexes;
 
-        indeces.push_back(std::type_index(typeid(Component)));
-        (indeces.push_back(std::type_index(typeid(Components))), ...);
+        indexes.push_back(typeid(Component));
+        (indexes.push_back(typeid(Components)), ...);
 
-        return indeces;
+        return indexes;
     }
 
     ////////////////////////////////////////////////////////////
@@ -187,6 +188,37 @@ public:
     Type* get(Entity entity)
     {
         return std::get_if<Type>(&mComponents[typeid(Type)].at(entity));
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get a component of a specified entity by its
+    /// index. This function adds a new component to the entity
+    /// if it doesn't already exist. This function is useful for
+    /// serialization and is supposed to be used with std::visit
+    ///
+    /// This function works only if all the components are
+    /// default constructible. Or at least don't require
+    /// parameters for construction
+    ///
+    /// \param entity Entity
+    /// \param index Index of the component
+    ///
+    /// \return Pointer to the component as variant
+    ///
+    ////////////////////////////////////////////////////////////
+    std::variant<Component, Components...>* get_by_index(Entity entity, std::type_index index)
+    {
+        if(mComponents[index].count(entity) == 0)
+        {
+            tsl::hopscotch_map<size_t, std::variant<Component, Components...>> indexes;
+
+            indexes.emplace(std::type_index(typeid(Component)).hash_code(), Component{});
+            (indexes.emplace(std::type_index(typeid(Components)).hash_code(), Components{}), ...);
+
+            mComponents[index][entity] = indexes[index.hash_code()];
+        }
+
+        return &mComponents[index].at(entity);
     }
 
     ////////////////////////////////////////////////////////////
