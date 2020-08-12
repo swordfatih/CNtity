@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
 // CNtity - Chats Noirs Entity Component System Helper
-// Copyright (c) 2018 - 2019 Fatih (accfldekur@gmail.com)
+// Copyright (c) 2018 - 2020 Fatih (accfldekur@gmail.com)
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -40,11 +40,14 @@
 //tsl
 #include "CNtity/tsl/hopscotch_map.h"
 
+//stduuid
+#include "CNtity/stduuid/uuid.h"
+
 namespace CNtity
 {
 
 ////////////////////////////////////////////////////////////
-using Entity = uint64_t; ///< Entities are only IDs
+using Entity = uuids::uuid; ///< Entities are only unique identifiers
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
@@ -91,14 +94,43 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get a list of all the entities
+    ///
+    /// \return unique identifier of every entities in an array
+    ///
+    ////////////////////////////////////////////////////////////
+    std::vector<Entity> entities() const
+    {
+        return mEntities;
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Create entity without any component
+    ///
+    /// \param identifier Give an existing identifier to the
+    /// created entity. If none is specified,if it is invalid
+    /// or if it already exists, a new unique one will be
+    /// generated.
     ///
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    Entity create()
+    Entity const create(uuids::uuid identifier = {})
     {
-        return ++mCountEntity;
+        Entity entity;
+
+        if(identifier.is_nil())
+        {
+            entity = uuids::uuid_random_generator{random_generator()}();
+        }
+        else
+        {
+            entity = identifier;
+        }
+
+        mEntities.push_back(entity);
+
+        return entity;
     }
 
     ////////////////////////////////////////////////////////////
@@ -111,13 +143,15 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Entity create(const Type& type, const Types& ... types)
+    Entity const create(const Type& type, const Types& ... types)
     {
-        mComponents[typeid(Type)][++mCountEntity] = type;
+        Entity entity = create();
+
+        mComponents[typeid(Type)][entity] = type;
 
         if constexpr (sizeof...(Types) != 0)
         {
-            emplace_variadic<Type, Types ...>(type, types ...);
+            emplace_variadic<Type, Types ...>(entity, type, types ...);
         }
 
         if(!mGroupings.empty())
@@ -125,7 +159,7 @@ public:
             mGroupings.clear();
         }
 
-        return mCountEntity;
+        return entity;
     }
 
     ////////////////////////////////////////////////////////////
@@ -428,13 +462,13 @@ private:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    void emplace_variadic(const Type& type, const Types& ... types)
+    void emplace_variadic(Entity entity, const Type& type, const Types& ... types)
     {
-        mComponents[typeid(Type)].emplace(std::make_pair(mCountEntity, type));
+        mComponents[typeid(Type)].emplace(std::make_pair(entity, type));
 
         if constexpr (sizeof...(Types) != 0)
         {
-            emplace_variadic<Types ...>(types ...);
+            emplace_variadic<Types ...>(entity, types ...);
         }
     }
 
@@ -465,11 +499,21 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Random generator using the standard library
+    ///
+    ////////////////////////////////////////////////////////////
+    static std::mt19937& random_generator()
+    {
+        static std::mt19937 random_generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+        return random_generator;
+    }
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
     tsl::hopscotch_map<uint32_t, std::vector<Entity>>                                                           mGroupings;         ///< Groupings
-    uint64_t                                                                                                    mCountEntity = 0;   ///< Entity count
+    std::vector<Entity>                                                                                         mEntities;          ///< Entities
 
 };
 
