@@ -22,8 +22,10 @@
 // 3. This notice may not be removed or altered from any source distribution.
 //
 /////////////////////////////////////////////////////////////////////////////////
+
 #ifndef HELPER_HPP
 #define HELPER_HPP
+
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
@@ -34,14 +36,21 @@
 #include <functional>
 #include <typeindex>
 #include <algorithm>
+#include <iostream>
+
 //tsl
 #include "CNtity/tsl/hopscotch_map.h"
+
 //stduuid
 #include "CNtity/stduuid/uuid.h"
+
 namespace CNtity
 {
+
 ////////////////////////////////////////////////////////////
-using Entity = uuids::uuid; ///< Entities are only unique identifiers
+using Entity = uuids::uuid;     ///< Entities are only unique identifiers
+using Mask = uint_least32_t;    ///< Bitmask
+
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
 /// Component System architecture
@@ -57,14 +66,18 @@ public:
     ////////////////////////////////////////////////////////////
     Helper() : mComponents()
     {
+
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Default destructor
     ///
     ////////////////////////////////////////////////////////////
     ~Helper()
     {
+
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Get registered components
     ///
@@ -75,47 +88,62 @@ public:
     std::vector<std::type_index> components() const
     {
         std::vector<std::type_index> indexes;
+
         indexes.push_back(typeid(Component));
         (indexes.push_back(typeid(Components)), ...);
+
         return indexes;
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get a list of all the entities
     /// \brief Get all the entities
     ///
     /// \return unique identifier of every entities in an array
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<Entity> entities() const
+    std::vector<Entity>&& entities()
     {
-        return mEntities;
+        std::vector<Entity> entities;
+        entities.reserve(mEntities.size());
+
+        for(auto&& [entity, mask]: mEntities)
+        {
+            entities.push_back(entity);
+        }
+
+        return std::move(entities);
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Create entity without any component
     ///
-    /// \param identifier Give an existing identifier to the
-    /// created entity. If none is specified,if it is invalid
-    /// or if it already exists, a new unique one will be
-    /// generated.
+    /// \param identifier Use a defined identifier for the new
+    /// entity. If none is specified, if the identifier is
+    /// invalid or if it is already used, a new unique identifier
+    /// will be generated.
     ///
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    Entity const create(uuids::uuid identifier = {})
+    Entity create(uuids::uuid identifier = {})
     {
         Entity entity;
-        if(identifier.is_nil())
+
+        if(identifier.is_nil() || mEntities.count(identifier) != 0)
         {
-            entity = uuids::uuid_random_generator{random_generator()}();
+            while(entity.is_nil() || mEntities.count(entity) != 0)
+            {
+                entity = uuids::uuid_random_generator{random_generator()}();
+            }
         }
         else
         {
             entity = identifier;
         }
-        mEntities.push_back(entity);
-        return entity;
+
+        return std::move(entity);
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Create entity with components
     ///
@@ -126,20 +154,36 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Entity const create(const Type& type, const Types& ... types)
+    Entity create(const Type& type, const Types& ... types)
     {
         Entity entity = create();
-        mComponents[typeid(Type)][entity] = type;
-        if constexpr (sizeof...(Types) != 0)
-        {
-            emplace_variadic<Type, Types ...>(entity, type, types ...);
-        }
-        if(!mGroupings.empty())
-        {
-            mGroupings.clear();
-        }
-        return entity;
+
+        add(entity, type, types ...);
+
+        return std::move(entity);
     }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Create entity with components using a defined
+    /// identifier
+    ///
+    /// \param identifier Defined identifier
+    /// \param type Component
+    /// \param types Components
+    ///
+    /// \return Created entity
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Type, typename ... Types>
+    Entity&& create(uuids::uuid identifier, const Type& type, const Types& ... types)
+    {
+        Entity entity = create(identifier);
+
+        add(entity, type, types ...);
+
+        return std::move(entity);
+    }
+
     ////////////////////////////////////////////////////////////
     /// \brief Add components to a specified entity
     ///
@@ -153,17 +197,22 @@ public:
     Type* add(Entity entity, const Type& type, const Types& ... types)
     {
         mComponents[typeid(Type)][entity] = type;
+
         if constexpr (sizeof...(Types) != 0)
         {
             auto assign = [&](const auto& component)
             {
                 mComponents[typeid(component)][entity] = component;
             };
+
             (assign(types), ...);
         }
+
         mGroupings.clear();
-        return get<Type>(entity);
+
+        return get<Type>(std::move(entity));
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Remove a component from a specified entity
     ///
@@ -174,12 +223,15 @@ public:
     void remove(Entity entity)
     {
         mComponents[typeid(Type)].erase(entity);
+
         if constexpr (sizeof...(Types) != 0)
         {
             (mComponents[typeid(Types)].erase(entity), ...);
         }
+
         mGroupings.clear();
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Get a component of a specified entity
     ///
@@ -189,10 +241,11 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type>
-    Type* get(Entity entity)
+    Type* get(const Entity& entity)
     {
         return std::get_if<Type>(&mComponents[typeid(Type)].at(entity));
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Get a component of a specified entity by its
     /// index. This function adds a new component to the entity
@@ -214,12 +267,16 @@ public:
         if(mComponents[index].count(entity) == 0)
         {
             tsl::hopscotch_map<size_t, std::variant<Component, Components...>> indexes;
+
             indexes.emplace(std::type_index(typeid(Component)).hash_code(), Component{});
             (indexes.emplace(std::type_index(typeid(Components)).hash_code(), Components{}), ...);
+
             mComponents[index][entity] = indexes[index.hash_code()];
         }
+
         return &mComponents[index].at(entity);
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Retrieve every components associated to a specified
     /// entity
@@ -233,6 +290,7 @@ public:
     std::vector<std::variant<Component, Components ...>*> retrieve(Entity entity)
     {
         std::vector<std::variant<Component, Components ...>*> components;
+
         for(auto& [component, entities]: mComponents)
         {
             if(entities.count(entity) > 0)
@@ -240,8 +298,10 @@ public:
                 components.push_back(const_cast<std::variant<Component, Components ...>*>(&entities.at(entity)));
             }
         }
+
         return components;
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Check if an entity contains specified components
     ///
@@ -251,7 +311,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    bool has(Entity entity)
+    bool has(const Entity& entity)
     {
         if constexpr (sizeof...(Types) == 0)
         {
@@ -261,8 +321,10 @@ public:
         {
             return mComponents[typeid(Type)].count(entity) > 0 && (mComponents[typeid(Types)].count(entity), ...);
         }
+
         return false;
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Execute a function for every entities that
     /// contain specified components
@@ -275,7 +337,7 @@ public:
     {
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto& [entity, component]: mComponents[typeid(Type)])
+            for(auto&& [entity, component]: mComponents[typeid(Type)])
             {
                 func(entity, const_cast<Type*>(&std::get<Type>(component)));
             }
@@ -285,16 +347,18 @@ public:
             uint_least32_t mask = bitmask<Type, Types...>();
             if(mGroupings.count(mask) == 0)
             {
-                auto& grouping = mGroupings[mask];
                 std::type_index type(typeid(Type));
-                smallest<Type, Types...>(type);
+                smallest<Types...>(type);
+
+                auto&& grouping = mGroupings[mask];
                 grouping.reserve(mComponents[type].size());
-                for(auto& [entity, component]: mComponents[type])
+
+                for(auto&& [entity, component]: mComponents[type])
                 {
                     if(has<Type, Types...>(entity))
                     {
                         func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
-                        grouping.emplace_back(entity);
+                        grouping.push_back(entity);
                     }
                 }
             }
@@ -307,6 +371,7 @@ public:
             }
         }
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Acquire entities that contains specified
     /// components
@@ -360,8 +425,10 @@ public:
                 return mGroupings[mask];
             }
         }
+
         return entities;
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Erase a specified entity
     ///
@@ -374,6 +441,7 @@ public:
         {
             const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(entities).erase(entity);
         }
+
         for(auto& [group, entities]: mGroupings)
         {
             auto position = std::find(entities.begin(), entities.end(), entity);
@@ -383,6 +451,7 @@ public:
             }
         }
     }
+
 private:
     ////////////////////////////////////////////////////////////
     /// \brief Compare components on the amount of entities
@@ -396,11 +465,13 @@ private:
         {
             component = typeid(Type);
         }
+
         if constexpr (sizeof...(Types) != 0)
         {
             smallest<Types ...>(component);
         }
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Add several components to the entities
     ///
@@ -409,32 +480,65 @@ private:
     void emplace_variadic(Entity entity, const Type& type, const Types& ... types)
     {
         mComponents[typeid(Type)].emplace(std::make_pair(entity, type));
+
         if constexpr (sizeof...(Types) != 0)
         {
             emplace_variadic<Types ...>(entity, types ...);
         }
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Create a bitmask with components
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    uint_least32_t bitmask()
+    Mask bitmask(Entity entity = {})
     {
-        std::vector<uint_least32_t> hashCodes;
-        hashCodes.reserve(sizeof...(Types) + 1);
-        hashCodes.push_back(std::type_index(typeid(Type)).hash_code());
-        if(sizeof...(Types) != 0)
+        Mask mask = 0;
+
+        if(entity.is_nil())
         {
-            (hashCodes.push_back(std::type_index(typeid(Types)).hash_code()), ...);
+            auto add_hash = [&mask](size_t hash_code)
+            {
+                mask |= (1 << hash_code);
+            };
+
+            mask |= (1 << std::type_index(typeid(Type)).hash_code());
+
+            if(sizeof...(Types) != 0)
+            {
+                (add_hash(std::type_index(typeid(Types)).hash_code()), ...);
+            }
+
+            /*std::vector<Mask> codes;
+            codes.reserve(sizeof...(Types) + 1);
+
+            codes.push_back(std::type_index(typeid(Type)).hash_code());
+
+            if(sizeof...(Types) != 0)
+            {
+                (codes.push_back(std::type_index(typeid(Types)).hash_code()), ...);
+            }
+
+            for(const auto& it: codes)
+            {
+                mask |= (1 << it);
+            }*/
         }
-        uint_least32_t mask = 0;
-        for(const auto& it: hashCodes)
+        else
         {
-            mask |= (1 << it);
+            for(auto& variant: retrieve(entity))
+            {
+                std::visit([&mask](auto component)
+                {
+                    mask |= 1 << std::type_index(typeid(decltype(component))).hash_code();
+                }, *variant);
+            }
         }
+
         return mask;
     }
+
     ////////////////////////////////////////////////////////////
     /// \brief Random generator using the standard library
     ///
@@ -444,12 +548,16 @@ private:
         static std::mt19937 random_generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
         return random_generator;
     }
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
-    tsl::hopscotch_map<uint32_t, std::vector<Entity>>                                                           mGroupings;         ///< Groupings
-    std::vector<Entity>                                                                                         mEntities;          ///< Entities
+    tsl::hopscotch_map<Mask, std::vector<Entity>>                                                               mGroupings;         ///< Groupings
+    tsl::hopscotch_map<Entity, Mask>                                                                            mEntities;          ///< Entities
+
 };
+
 } // namespace CNtity
+
 #endif // HELPER_HPP
