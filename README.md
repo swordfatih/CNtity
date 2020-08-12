@@ -108,7 +108,7 @@ Functions | Description
 I have tried to make CNtity as fast as I could! Here is a little benchmark I have done (Intel Core i5-8300H CPU @ 2.30GHz) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make yourself an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
 
 
-|   | Entities | Iterations | Probability | Create and add | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
+|   | Entities | Iterations | Probability | `create` and `add` | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | CNtity | 1'000 | 100 | 3 | 13 ms | 0 ms | 0 ms | 0 ms | 0 ms |
 | EntityX | 1'000 | 100 | 3 | 0 ms | 0 ms | 1 ms | / | / |
