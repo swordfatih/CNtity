@@ -91,7 +91,7 @@ Functions | Description
 ------- | -----------
 `components()` | Get registered components.
 `entities()` | Get all the entities.
-`create<Component>()` | Creates an entity with or without components.
+`create<Component>(identifier)` | Creates an entity with or without components, a defined identifier can be used, otherwise, by default, a new unique identifier will be generated.
 `add<Component>(entity)` | Add a component to an entity.
 `remove<Component>(entity)` | Remove a component from an entity.
 `get<Component>(entity)` | Get a specified component of an entity.
@@ -105,23 +105,22 @@ Functions | Description
 
 ### Performances
 
-I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
+I have tried to make CNtity as fast as I could! Here is a little benchmark I have done (Intel Core i5-8300H CPU @ 2.30GHz) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make yourself an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
 
-*\*will do it again with my gamer setup*
 
-|   | Entities | Iterations | Probability | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
+|   | Entities | Iterations | Probability | Create and add | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| CNtity | 1'000 | 100 | 3 | 0 ms | 0 ms | 0 ms | 0 ms |
-| EntityX | 1'000 | 100 | 3 | 0 ms | 1 ms | / | / |
-| CNtity | 1'000 | 1'000'000 | 3 | 2'523 ms | 6'117 ms | 5'333 ms | 5'156 ms |
-| EntityX | 1'000 | 1'000'000 | 3 | 11'738 ms | 22'208 ms | / | / |
-| CNtity | 10'000 | 1'000'000 | 3 | 23'081 ms | 60'542 ms | 53'160 ms | 51'339 ms |
-| EntityX | 10'000 | 1'000'000 | 3 | 113'041 ms | 219'806 ms | / | / |
-| CNtity | 30'000 | 100'000 | 3 | 7'627 ms | 18'743 ms | 16'038 ms | 15'480 ms |
-| EntityX | 30'000 | 100'000 | 3 | 33'709 ms | 67'798 ms | / | / |
-| CNtity | 100'000 | 100'000 | 5 | 15'195 ms | 36'691 ms | 32'948 ms | 31'123 ms |
-| EntityX | 100'000 | 100'000 | 5 | 72'244 ms | 145'751 ms | / | / |
-| CNtity | 10'000 | 1'000'000 | 1'000 | 136 ms | 243 ms | 278 ms | 288 ms |
-| EntityX | 10'000 | 1'000'000 | 1'000 | 9'160 ms | 8'377 ms | / | / |
-| CNtity | 100'000 | 1'000'000 | 1'000 | 790 ms | 2'205 ms | 2'053 ms | 2'018 ms |
-| EntityX | 100'000 | 1'000'000 | 1'000 | 94'978 ms | 86'477 ms | / | / |
+| CNtity | 1'000 | 100 | 3 | 13 ms | 0 ms | 0 ms | 0 ms | 0 ms |
+| EntityX | 1'000 | 100 | 3 | 0 ms | 0 ms | 1 ms | / | / |
+| CNtity | 1'000 | 1'000'000 | 3 | 12 ms | 69 ms | 86 ms | 63 ms | 74 ms |
+| EntityX | 1'000 | 1'000'000 | 3 | 0 ms | 7'523 ms | 15'550 ms | / | / |
+| CNtity | 10'000 | 1'000'000 | 3 | 123 ms | 73 ms | 88 ms | 61 ms | 70 ms |
+| EntityX | 10'000 | 1'000'000 | 3 | 0 ms | 76'136 ms | 172'437 ms | / | / |
+| CNtity | 30'000 | 100'000 | 3 | 401 ms | 6 ms | 7 ms | 7 ms | 8 ms |
+| EntityX | 30'000 | 100'000 | 3 | 2 ms | 24'571 ms | 54'553 ms | / | / |
+| CNtity | 100'000 | 100'000 | 5 | 1054 ms | 7 ms | 8 ms | 7 ms | 7 ms |
+| EntityX | 100'000 | 100'000 | 5 | 10 ms | 50'626 ms | 104'086 ms | / | / |
+| CNtity | 10'000 | 1'000'000 | 1'000 | 91 ms | 63 ms | 89 ms | 77 ms | 75 ms |
+| EntityX | 10'000 | 1'000'000 | 1'000 | 0 ms | 5'562 ms | 8'426 ms | / | / |
+| CNtity | 100'000 | 1'000'000 | 1'000 | 800 ms | 63 ms | 91 ms | 74 ms | 77 ms |
+| EntityX | 100'000 | 1'000'000 | 1'000 | 8 ms | 57'402 ms | 83'855 ms | / | / |
