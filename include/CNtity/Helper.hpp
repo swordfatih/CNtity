@@ -94,7 +94,7 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get a list of all the entities
+    /// \brief Get all the entities
     ///
     /// \return unique identifier of every entities in an array
     ///
