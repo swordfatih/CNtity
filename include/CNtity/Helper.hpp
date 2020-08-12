@@ -47,7 +47,8 @@ namespace CNtity
 {
 
 ////////////////////////////////////////////////////////////
-using Entity = uuids::uuid; ///< Entities are only unique identifiers
+using Entity = uuids::uuid;     ///< Entities are only unique identifiers
+using Mask = uint_least32_t;    ///< Bitmask
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
@@ -99,38 +100,49 @@ public:
     /// \return unique identifier of every entities in an array
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<Entity> entities() const
+    std::vector<Entity>&& entities()
     {
-        return mEntities;
+        std::vector<Entity> entities;
+        entities.reserve(mEntities.size());
+
+        for(auto&& [entity, mask]: mEntities)
+        {
+            entities.push_back(entity);
+        }
+
+        return std::move(entities);
     }
 
     ////////////////////////////////////////////////////////////
     /// \brief Create entity without any component
     ///
-    /// \param identifier Give an existing identifier to the
-    /// created entity. If none is specified,if it is invalid
-    /// or if it already exists, a new unique one will be
-    /// generated.
+    /// \param identifier Use a defined identifier for the new
+    /// entity. If none is specified, if the identifier is
+    /// invalid or if it is already used, a new unique identifier
+    /// will be generated.
     ///
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    Entity const create(uuids::uuid identifier = {})
+    Entity create(uuids::uuid identifier = {})
     {
         Entity entity;
 
-        if(identifier.is_nil())
+        if(identifier.is_nil() || mEntities.count(identifier) != 0)
         {
-            entity = uuids::uuid_random_generator{random_generator()}();
+            while(entity.is_nil() || mEntities.count(entity) != 0)
+            {
+                entity = uuids::uuid_random_generator{random_generator()}();
+            }
         }
         else
         {
             entity = identifier;
         }
 
-        mEntities.push_back(entity);
+        mEntities[entity] = 0;
 
-        return entity;
+        return std::move(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -143,23 +155,34 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Entity const create(const Type& type, const Types& ... types)
+    Entity create(const Type& type, const Types& ... types)
     {
         Entity entity = create();
 
-        mComponents[typeid(Type)][entity] = type;
+        add(entity, type, types ...);
 
-        if constexpr (sizeof...(Types) != 0)
-        {
-            emplace_variadic<Type, Types ...>(entity, type, types ...);
-        }
+        return std::move(entity);
+    }
 
-        if(!mGroupings.empty())
-        {
-            mGroupings.clear();
-        }
+    ////////////////////////////////////////////////////////////
+    /// \brief Create entity with components using a defined
+    /// identifier
+    ///
+    /// \param identifier Defined identifier
+    /// \param type Component
+    /// \param types Components
+    ///
+    /// \return Created entity
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Type, typename ... Types>
+    Entity&& create(uuids::uuid identifier, const Type& type, const Types& ... types)
+    {
+        Entity entity = create(identifier);
 
-        return entity;
+        add(entity, type, types ...);
+
+        return std::move(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -174,6 +197,8 @@ public:
     template <typename Type, typename ... Types>
     Type* add(Entity entity, const Type& type, const Types& ... types)
     {
+        switch_grouping<Type, Types...>(entity);
+
         mComponents[typeid(Type)][entity] = type;
 
         if constexpr (sizeof...(Types) != 0)
@@ -186,9 +211,7 @@ public:
             (assign(types), ...);
         }
 
-        mGroupings.clear();
-
-        return get<Type>(entity);
+        return get<Type>(std::move(entity));
     }
 
     ////////////////////////////////////////////////////////////
@@ -200,14 +223,14 @@ public:
     template <typename Type, typename ... Types>
     void remove(Entity entity)
     {
+        switch_grouping<Type, Types...>(entity);
+
         mComponents[typeid(Type)].erase(entity);
 
         if constexpr (sizeof...(Types) != 0)
         {
             (mComponents[typeid(Types)].erase(entity), ...);
         }
-
-        mGroupings.clear();
     }
 
     ////////////////////////////////////////////////////////////
@@ -313,41 +336,9 @@ public:
     template <typename Type, typename ... Types>
     void for_each(std::function<void(Entity, Type*)> func)
     {
-        if constexpr (sizeof...(Types) == 0)
+        for(auto&& entity: mGroupings[bitmask<Type, Types...>()])
         {
-            for(auto& [entity, component]: mComponents[typeid(Type)])
-            {
-                func(entity, const_cast<Type*>(&std::get<Type>(component)));
-            }
-        }
-        else
-        {
-            uint_least32_t mask = bitmask<Type, Types...>();
-            if(mGroupings.count(mask) == 0)
-            {
-                auto& grouping = mGroupings[mask];
-
-                std::type_index type(typeid(Type));
-                smallest<Type, Types...>(type);
-
-                grouping.reserve(mComponents[type].size());
-
-                for(auto& [entity, component]: mComponents[type])
-                {
-                    if(has<Type, Types...>(entity))
-                    {
-                        func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
-                        grouping.emplace_back(entity);
-                    }
-                }
-            }
-            else
-            {
-                for(const auto& entity: mGroupings[mask])
-                {
-                    func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
-                }
-            }
+            func(entity, &std::get<Type>(mComponents[typeid(Type)].at(entity)));
         }
     }
 
@@ -361,57 +352,7 @@ public:
     template <typename Type, typename ... Types>
     std::vector<Entity> acquire()
     {
-        std::vector<Entity> entities;
-
-        if constexpr (sizeof...(Types) == 0)
-        {
-            if(mGroupings.count(1 << std::type_index(typeid(Type)).hash_code()) == 0)
-            {
-                entities.reserve(mComponents[typeid(Type)].size());
-
-                for(const auto& entity: mComponents[typeid(Type)])
-                {
-                    entities.emplace_back(entity.first);
-                }
-
-                auto& grouping = mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
-                grouping.reserve(entities.size());
-                grouping = entities;
-            }
-            else
-            {
-                return mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
-            }
-        }
-        else
-        {
-            uint_least32_t mask = bitmask<Type, Types...>();
-            if(mGroupings.count(mask) == 0)
-            {
-                std::type_index type(typeid(Type));
-                smallest<Type, Types...>(type);
-
-                entities.reserve(mComponents[type].size());
-
-                for(const auto& entity: mComponents[typeid(Type)])
-                {
-                    if(has<Type, Types...>(entity.first))
-                    {
-                        entities.emplace_back(entity.first);
-                    }
-                }
-
-                auto& grouping = mGroupings[mask];
-                grouping.reserve(entities.size());
-                grouping = entities;
-            }
-            else
-            {
-                return mGroupings[mask];
-            }
-        }
-
-        return entities;
+        return mGroupings[bitmask<Type, Types...>()];
     }
 
     ////////////////////////////////////////////////////////////
@@ -427,14 +368,7 @@ public:
             const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(entities).erase(entity);
         }
 
-        for(auto& [group, entities]: mGroupings)
-        {
-            auto position = std::find(entities.begin(), entities.end(), entity);
-            if(position != entities.end())
-            {
-                const_cast<std::vector<Entity>&>(entities).erase(position);
-            }
-        }
+        mGroupings.erase(mEntities.at(entity));
     }
 
 private:
@@ -477,9 +411,9 @@ private:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    uint_least32_t bitmask()
+    Mask bitmask() const
     {
-        std::vector<uint_least32_t> hashCodes;
+        std::vector<Mask> hashCodes;
         hashCodes.reserve(sizeof...(Types) + 1);
 
         hashCodes.push_back(std::type_index(typeid(Type)).hash_code());
@@ -489,13 +423,31 @@ private:
             (hashCodes.push_back(std::type_index(typeid(Types)).hash_code()), ...);
         }
 
-        uint_least32_t mask = 0;
+        Mask mask = 0;
         for(const auto& it: hashCodes)
         {
             mask |= (1 << it);
         }
 
         return mask;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Switch entity to a new grouping
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Type, typename... Types>
+    Mask&& switch_grouping(Entity entity)
+    {
+        if(mEntities.at(entity) != 0)
+        {
+            auto&& grouping = mGroupings[mEntities.at(entity)];
+            grouping.erase(std::find(grouping.begin(), grouping.end(), entity));
+        }
+
+        auto&& mask = bitmask<Type, Types...>();
+        mGroupings[mask].push_back(entity);
+        return std::move(mEntities.at(entity) = mask);
     }
 
     ////////////////////////////////////////////////////////////
@@ -512,8 +464,8 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
-    tsl::hopscotch_map<uint32_t, std::vector<Entity>>                                                           mGroupings;         ///< Groupings
-    std::vector<Entity>                                                                                         mEntities;          ///< Entities
+    tsl::hopscotch_map<Mask, std::vector<Entity>>                                                               mGroupings;         ///< Groupings
+    tsl::hopscotch_map<Entity, Mask>                                                                            mEntities;          ///< Entities
 
 };
 
