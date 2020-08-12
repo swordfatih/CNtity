@@ -109,7 +109,7 @@ I have tried to make CNtity as fast as I could! Here is a little benchmark I hav
 
 
 |   | Entities | Iterations | Probability | Create and add | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | CNtity | 1'000 | 100 | 3 | 13 ms | 0 ms | 0 ms | 0 ms | 0 ms |
 | EntityX | 1'000 | 100 | 3 | 0 ms | 0 ms | 1 ms | / | / |
 | CNtity | 1'000 | 1'000'000 | 3 | 12 ms | 69 ms | 86 ms | 63 ms | 74 ms |
