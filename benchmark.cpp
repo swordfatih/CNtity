@@ -14,7 +14,7 @@ public:
 	~Timer()
 	{
 		auto end = std::chrono::high_resolution_clock::now();
-		std::cout << mString << ' ' << std::chrono::duration_cast<std::chrono::milliseconds>(end - mStart).count() << "ms\n";
+		std::cout << mString << ' ' << std::chrono::duration_cast<std::chrono::milliseconds>(end - mStart).count() << " ms\n";
 	}
 
 private:
@@ -50,9 +50,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                helper.for_each<int>([&](auto ent, auto i)
+                helper.for_each<int>([&](auto ent, auto num)
                 {
-                    sum += *i;
+                    sum += *num;
                 });
             }
         }
@@ -62,9 +62,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                helper.for_each<int, std::string>([&](auto ent, auto i)
+                helper.for_each<int, std::string>([&](auto ent, auto num)
                 {
-                    sum += *i;
+                    sum += *num;
                 });
             }
         }
@@ -74,9 +74,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto it: helper.acquire<int>())
+                for(auto&& [entity, num]: helper.acquire<int>())
                 {
-                    sum += *helper.get<int>(it);
+                    sum += std::get<int>(num);
                 };
             }
         }
@@ -86,9 +86,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto it: helper.acquire<int, std::string>())
+                for(auto&& [entity, num]: helper.acquire<int, std::string>())
                 {
-                    sum += *helper.get<int>(it);
+                    sum += std::get<int>(num);
                 };
             }
         }
@@ -122,9 +122,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                manager.entities.each<int>([&sum](auto ent, auto i)
+                manager.entities.each<int>([&sum](auto ent, auto num)
                 {
-                    sum += i;
+                    sum += num;
                 });
             }
         }
@@ -134,9 +134,9 @@ int main()
             std::uint64_t sum = 0;
             for(int i = 0; i < iterationCount; ++i)
             {
-                manager.entities.each<int, std::string>([&sum](auto ent, auto i, auto str)
+                manager.entities.each<int, std::string>([&sum](auto ent, auto num, auto str)
                 {
-                    sum += i;
+                    sum += num;
                 });
             }
         }
