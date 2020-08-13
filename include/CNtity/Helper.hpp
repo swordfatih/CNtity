@@ -114,8 +114,7 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Check if an entity matchs with the given
-    /// identifier
+    /// \brief Check if an entity matchs with a given identifier
     ///
     /// \param identifier Unique identifier
     ///
