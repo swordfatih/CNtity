@@ -91,6 +91,7 @@ Functions | Description
 ------- | -----------
 `components()` | Get registered components.
 `entities()` | Get all the entities.
+`match(identifier)` | Check if an entity matchs with a given identifier
 `create<Component>(identifier)` | Creates an entity with or without components, a defined identifier can be used, otherwise, by default, a new unique identifier will be generated.
 `add<Component>(entity)` | Add a component to an entity.
 `remove<Component>(entity)` | Remove a component from an entity.
