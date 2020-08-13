@@ -139,23 +139,14 @@ public:
     ////////////////////////////////////////////////////////////
     Entity create(uuids::uuid identifier = {})
     {
-        Entity entity;
-
         if(identifier.is_nil() || match(identifier))
         {
-            while(entity.is_nil() || match(entity))
-            {
-                entity = uuids::uuid_random_generator{random_generator()}();
-            }
-        }
-        else
-        {
-            entity = identifier;
+            identifier = uuids::uuid_random_generator{random_generator()}();
         }
 
-        m_entities.push_back(entity);
+        m_entities.push_back(identifier);
 
-        return std::move(entity);
+        return identifier;
     }
 
     ////////////////////////////////////////////////////////////
@@ -170,11 +161,11 @@ public:
     template <typename Type, typename ... Types>
     Entity create(const Type& type, const Types& ... types)
     {
-        Entity entity = create();
+        Entity&& entity = create();
 
         add(entity, type, types ...);
 
-        return std::move(entity);
+        return entity;
     }
 
     ////////////////////////////////////////////////////////////
@@ -189,13 +180,13 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Entity&& create(uuids::uuid identifier, const Type& type, const Types& ... types)
+    Entity create(const uuids::uuid& identifier, const Type& type, const Types& ... types)
     {
-        Entity entity = create(identifier);
+        Entity&& entity = create(identifier);
 
         add(entity, type, types ...);
 
-        return std::move(entity);
+        return entity;
     }
 
     ////////////////////////////////////////////////////////////
@@ -208,28 +199,18 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Type* add(Entity entity, const Type& type, const Types& ... types)
+    Type* add(const Entity& entity, const Type& type, const Types& ... types)
     {
-        if(!match(entity))
-        {
-            throw std::out_of_range("Entity doesn't exist.");
-        }
-
-        m_components[typeid(Type)][entity] = type;
+        m_components[typeid(Type)].insert(std::make_pair(entity, type));
 
         if constexpr (sizeof...(Types) != 0)
         {
-            auto assign = [&](const auto& component)
-            {
-                m_components[typeid(component)][entity] = component;
-            };
-
-            (assign(types), ...);
+            (m_components[typeid(types)].insert(std::make_pair(entity, types)), ...);
         }
 
         m_groupings.clear();
 
-        return get<Type>(std::move(entity));
+        return get<Type>(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -239,7 +220,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    void remove(Entity entity)
+    void remove(const Entity& entity)
     {
         m_components[typeid(Type)].erase(entity);
 
@@ -281,7 +262,7 @@ public:
     /// \return Pointer to the component as variant
     ///
     ////////////////////////////////////////////////////////////
-    std::variant<Component, Components...>* get_by_index(Entity entity, std::type_index index)
+    std::variant<Component, Components...>* get_by_index(const Entity& entity, std::type_index index)
     {
         if(m_components[index].count(entity) == 0)
         {
@@ -306,7 +287,7 @@ public:
     /// entity
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<std::variant<Component, Components ...>*> retrieve(Entity entity)
+    std::vector<std::variant<Component, Components ...>*> retrieve(const Entity& entity)
     {
         std::vector<std::variant<Component, Components ...>*> components;
 
@@ -436,7 +417,7 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    void erase(Entity entity)
+    void erase(const Entity& entity)
     {
         for(auto& [component, entities]: m_components)
         {
@@ -469,21 +450,6 @@ private:
         if constexpr (sizeof...(Types) != 0)
         {
             smallest<Types ...>(component);
-        }
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Add several components to the entities
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename Type, typename ... Types>
-    void emplace_variadic(Entity entity, const Type& type, const Types& ... types)
-    {
-        m_components[typeid(Type)].emplace(std::make_pair(entity, type));
-
-        if constexpr (sizeof...(Types) != 0)
-        {
-            emplace_variadic<Types ...>(entity, types ...);
         }
     }
 
