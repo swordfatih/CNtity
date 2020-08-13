@@ -41,12 +41,12 @@ int main()
     CNtity::Helper<Position, Velocity, Health, std::string> helper;
 
     //Creating entities
-    auto chat = helper.create<std::string>({"chat"});
+    auto&& chat = helper.create<std::string>({"chat"});
     helper.create<std::string>({"chien"});
     helper.create<std::string, Position>({"velociraptor"}, {25, 70});
 
     //Adding component, changing values
-    auto position = helper.add<Position>(chat, {50, 50});
+    auto&& position = helper.add<Position>(chat, {50, 50});
     position->x += 50;
 
     //System 1
@@ -54,7 +54,7 @@ int main()
     {
         if(*identity == "chat")
         {
-            auto position = helper.get<Position>(entity);
+            auto&& position = helper.get<Position>(entity);
             position->x = 200;
             position->y = 70;
 
@@ -67,7 +67,7 @@ int main()
     {
         if(std::get<std::string>(identity) == "chat")
         {
-            auto position = helper.get<Position>(entity);
+            auto&& position = helper.get<Position>(entity);
             position->x = 200;
             position->y = 70;
         }
