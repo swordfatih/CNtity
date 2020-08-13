@@ -64,7 +64,7 @@ public:
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    Helper() : mComponents()
+    Helper() : m_components(), m_groupings(), m_entities()
     {
 
     }
@@ -104,14 +104,28 @@ public:
     std::vector<Entity>&& entities()
     {
         std::vector<Entity> entities;
-        entities.reserve(mEntities.size());
+        entities.reserve(m_entities.size());
 
-        for(auto&& [entity, mask]: mEntities)
+        for(auto&& [entity, mask]: m_entities)
         {
             entities.push_back(entity);
         }
 
         return std::move(entities);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Check if an entity matchs with the given
+    /// identifier
+    ///
+    /// \param identifier Unique identifier
+    ///
+    /// \return True if the identifier exists
+    ///
+    ////////////////////////////////////////////////////////////
+    bool match(const uuids::uuid& identifier)
+    {
+        return std::find(m_entities.begin(), m_entities.end(), identifier) != m_entities.end();
     }
 
     ////////////////////////////////////////////////////////////
@@ -129,9 +143,9 @@ public:
     {
         Entity entity;
 
-        if(identifier.is_nil() || mEntities.count(identifier) != 0)
+        if(identifier.is_nil() || match(identifier))
         {
-            while(entity.is_nil() || mEntities.count(entity) != 0)
+            while(entity.is_nil() || match(entity))
             {
                 entity = uuids::uuid_random_generator{random_generator()}();
             }
@@ -140,6 +154,8 @@ public:
         {
             entity = identifier;
         }
+
+        m_entities.push_back(entity);
 
         return std::move(entity);
     }
@@ -196,19 +212,24 @@ public:
     template <typename Type, typename ... Types>
     Type* add(Entity entity, const Type& type, const Types& ... types)
     {
-        mComponents[typeid(Type)][entity] = type;
+        if(!match(entity))
+        {
+            throw std::out_of_range("Entity doesn't exist.");
+        }
+
+        m_components[typeid(Type)][entity] = type;
 
         if constexpr (sizeof...(Types) != 0)
         {
             auto assign = [&](const auto& component)
             {
-                mComponents[typeid(component)][entity] = component;
+                m_components[typeid(component)][entity] = component;
             };
 
             (assign(types), ...);
         }
 
-        mGroupings.clear();
+        m_groupings.clear();
 
         return get<Type>(std::move(entity));
     }
@@ -222,14 +243,14 @@ public:
     template <typename Type, typename ... Types>
     void remove(Entity entity)
     {
-        mComponents[typeid(Type)].erase(entity);
+        m_components[typeid(Type)].erase(entity);
 
         if constexpr (sizeof...(Types) != 0)
         {
-            (mComponents[typeid(Types)].erase(entity), ...);
+            (m_components[typeid(Types)].erase(entity), ...);
         }
 
-        mGroupings.clear();
+        m_groupings.clear();
     }
 
     ////////////////////////////////////////////////////////////
@@ -243,7 +264,7 @@ public:
     template <typename Type>
     Type* get(const Entity& entity)
     {
-        return std::get_if<Type>(&mComponents[typeid(Type)].at(entity));
+        return std::get_if<Type>(&m_components[typeid(Type)].at(entity));
     }
 
     ////////////////////////////////////////////////////////////
@@ -264,17 +285,17 @@ public:
     ////////////////////////////////////////////////////////////
     std::variant<Component, Components...>* get_by_index(Entity entity, std::type_index index)
     {
-        if(mComponents[index].count(entity) == 0)
+        if(m_components[index].count(entity) == 0)
         {
             tsl::hopscotch_map<size_t, std::variant<Component, Components...>> indexes;
 
             indexes.emplace(std::type_index(typeid(Component)).hash_code(), Component{});
             (indexes.emplace(std::type_index(typeid(Components)).hash_code(), Components{}), ...);
 
-            mComponents[index][entity] = indexes[index.hash_code()];
+            m_components[index][entity] = indexes[index.hash_code()];
         }
 
-        return &mComponents[index].at(entity);
+        return &m_components[index].at(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -291,7 +312,7 @@ public:
     {
         std::vector<std::variant<Component, Components ...>*> components;
 
-        for(auto& [component, entities]: mComponents)
+        for(auto& [component, entities]: m_components)
         {
             if(entities.count(entity) > 0)
             {
@@ -315,11 +336,11 @@ public:
     {
         if constexpr (sizeof...(Types) == 0)
         {
-            return mComponents[typeid(Type)].count(entity) > 0;
+            return m_components[typeid(Type)].count(entity) > 0;
         }
         else
         {
-            return mComponents[typeid(Type)].count(entity) > 0 && (mComponents[typeid(Types)].count(entity), ...);
+            return m_components[typeid(Type)].count(entity) > 0 && (m_components[typeid(Types)].count(entity), ...);
         }
 
         return false;
@@ -337,36 +358,38 @@ public:
     {
         if constexpr (sizeof...(Types) == 0)
         {
-            for(auto&& [entity, component]: mComponents[typeid(Type)])
+            for(auto& [entity, component]: m_components[typeid(Type)])
             {
                 func(entity, const_cast<Type*>(&std::get<Type>(component)));
             }
         }
         else
         {
-            uint_least32_t mask = bitmask<Type, Types...>();
-            if(mGroupings.count(mask) == 0)
+            auto&& code = bitmask<Type, Types...>();
+
+            if(m_groupings.count(code) == 0)
             {
                 std::type_index type(typeid(Type));
                 smallest<Types...>(type);
 
-                auto&& grouping = mGroupings[mask];
-                grouping.reserve(mComponents[type].size());
+                auto&& grouping = m_groupings[code];
+                grouping.reserve(m_components[type].size());
 
-                for(auto&& [entity, component]: mComponents[type])
+                for(auto&& [entity, variant]: m_components[type])
                 {
                     if(has<Type, Types...>(entity))
                     {
-                        func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
-                        grouping.push_back(entity);
+                        auto&& component = m_components[typeid(Type)][entity];
+                        func(entity, &std::get<Type>(component));
+                        grouping[entity] = component;
                     }
                 }
             }
             else
             {
-                for(const auto& entity: mGroupings[mask])
+                for(auto&& [entity, component]: m_groupings[code])
                 {
-                    func(entity, &std::get<Type>(mComponents[typeid(Type)][entity]));
+                    func(entity, const_cast<Type*>(&std::get<Type>(component)));
                 }
             }
         }
@@ -376,57 +399,37 @@ public:
     /// \brief Acquire entities that contains specified
     /// components
     ///
-    /// \return Vector of entities that contain specified components
+    /// \return Vector of entities that contain specified
+    /// components
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    std::vector<Entity> acquire()
+    tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>& acquire()
     {
-        std::vector<Entity> entities;
         if constexpr (sizeof...(Types) == 0)
         {
-            if(mGroupings.count(1 << std::type_index(typeid(Type)).hash_code()) == 0)
-            {
-                entities.reserve(mComponents[typeid(Type)].size());
-                for(const auto& entity: mComponents[typeid(Type)])
-                {
-                    entities.emplace_back(entity.first);
-                }
-                auto& grouping = mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
-                grouping.reserve(entities.size());
-                grouping = entities;
-            }
-            else
-            {
-                return mGroupings[1 << std::type_index(typeid(Type)).hash_code()];
-            }
+            return m_components[typeid(Type)];
         }
-        else
+
+        auto&& code = bitmask<Type, Types...>();
+
+        if(m_groupings.count(code) == 0)
         {
-            uint_least32_t mask = bitmask<Type, Types...>();
-            if(mGroupings.count(mask) == 0)
+            std::type_index type(typeid(Type));
+            smallest<Type, Types...>(type);
+
+            m_groupings[code].reserve(m_components[type].size());
+
+            for(auto&& [entity, component]: m_components[type])
             {
-                std::type_index type(typeid(Type));
-                smallest<Type, Types...>(type);
-                entities.reserve(mComponents[type].size());
-                for(const auto& entity: mComponents[typeid(Type)])
+                if(has<Type, Types...>(entity))
                 {
-                    if(has<Type, Types...>(entity.first))
-                    {
-                        entities.emplace_back(entity.first);
-                    }
+                    m_groupings[code].insert(std::make_pair(entity, m_components[typeid(Type)][entity]));
                 }
-                auto& grouping = mGroupings[mask];
-                grouping.reserve(entities.size());
-                grouping = entities;
-            }
-            else
-            {
-                return mGroupings[mask];
             }
         }
 
-        return entities;
+        return m_groupings[code];
     }
 
     ////////////////////////////////////////////////////////////
@@ -437,17 +440,16 @@ public:
     ////////////////////////////////////////////////////////////
     void erase(Entity entity)
     {
-        for(auto& [component, entities]: mComponents)
+        for(auto& [component, entities]: m_components)
         {
             const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(entities).erase(entity);
         }
 
-        for(auto& [group, entities]: mGroupings)
+        for(auto& [mask, group]: m_groupings)
         {
-            auto position = std::find(entities.begin(), entities.end(), entity);
-            if(position != entities.end())
+            if(group.count(entity) != 0)
             {
-                const_cast<std::vector<Entity>&>(entities).erase(position);
+                const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(group).erase(entity);
             }
         }
     }
@@ -461,7 +463,7 @@ private:
     template <typename Type, typename ... Types>
     void smallest(std::type_index& component)
     {
-        if(mComponents[typeid(Type)].size() < mComponents[component].size())
+        if(m_components[typeid(Type)].size() < m_components[component].size())
         {
             component = typeid(Type);
         }
@@ -479,7 +481,7 @@ private:
     template <typename Type, typename ... Types>
     void emplace_variadic(Entity entity, const Type& type, const Types& ... types)
     {
-        mComponents[typeid(Type)].emplace(std::make_pair(entity, type));
+        m_components[typeid(Type)].emplace(std::make_pair(entity, type));
 
         if constexpr (sizeof...(Types) != 0)
         {
@@ -492,51 +494,13 @@ private:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Mask bitmask(Entity entity = {})
+    Mask bitmask()
     {
-        Mask mask = 0;
+        Mask code = (1 << std::type_index(typeid(Type)).hash_code());
 
-        if(entity.is_nil())
-        {
-            auto add_hash = [&mask](size_t hash_code)
-            {
-                mask |= (1 << hash_code);
-            };
+        ((code |= (1 << std::type_index(typeid(Types)).hash_code())), ...);
 
-            mask |= (1 << std::type_index(typeid(Type)).hash_code());
-
-            if(sizeof...(Types) != 0)
-            {
-                (add_hash(std::type_index(typeid(Types)).hash_code()), ...);
-            }
-
-            /*std::vector<Mask> codes;
-            codes.reserve(sizeof...(Types) + 1);
-
-            codes.push_back(std::type_index(typeid(Type)).hash_code());
-
-            if(sizeof...(Types) != 0)
-            {
-                (codes.push_back(std::type_index(typeid(Types)).hash_code()), ...);
-            }
-
-            for(const auto& it: codes)
-            {
-                mask |= (1 << it);
-            }*/
-        }
-        else
-        {
-            for(auto& variant: retrieve(entity))
-            {
-                std::visit([&mask](auto component)
-                {
-                    mask |= 1 << std::type_index(typeid(decltype(component))).hash_code();
-                }, *variant);
-            }
-        }
-
-        return mask;
+        return code;
     }
 
     ////////////////////////////////////////////////////////////
@@ -552,10 +516,9 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    mComponents;        ///< Components
-    tsl::hopscotch_map<Mask, std::vector<Entity>>                                                               mGroupings;         ///< Groupings
-    tsl::hopscotch_map<Entity, Mask>                                                                            mEntities;          ///< Entities
-
+    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    m_components;    ///< Components
+    tsl::hopscotch_map<Mask, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>               m_groupings;     ///< Groupings
+    std::vector<Entity>                                                                                         m_entities;      ///< Entities
 };
 
 } // namespace CNtity
