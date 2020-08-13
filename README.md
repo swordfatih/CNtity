@@ -106,23 +106,22 @@ Functions | Description
 
 ### Performances
 
-I have tried to make CNtity as fast as I could! Here is a little benchmark I have done on my old computer I code with* (Intel Core i3-4160T) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
+My goal id to make CNtity as fast as I can! Here is a little benchmark I have done (Intel Core i5-8300H CPU @ 2.30GHz) between CNtity and EntityX (another ECS library, most referenced on google for me). It's probably not accurate but it will help you to make yourself an idea about CNtity. [Here](https://github.com/swordfatih/CNtity/blob/master/benchmark.cpp) is the source code.
 
-*\*will do it again with my gamer setup*
 
-|   | Entities | Iterations | Probability | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| CNtity | 1'000 | 100 | 3 | 0 ms | 0 ms | 0 ms | 0 ms |
-| EntityX | 1'000 | 100 | 3 | 0 ms | 1 ms | / | / |
-| CNtity | 1'000 | 1'000'000 | 3 | 2'523 ms | 6'117 ms | 5'333 ms | 5'156 ms |
-| EntityX | 1'000 | 1'000'000 | 3 | 11'738 ms | 22'208 ms | / | / |
-| CNtity | 10'000 | 1'000'000 | 3 | 23'081 ms | 60'542 ms | 53'160 ms | 51'339 ms |
-| EntityX | 10'000 | 1'000'000 | 3 | 113'041 ms | 219'806 ms | / | / |
-| CNtity | 30'000 | 100'000 | 3 | 7'627 ms | 18'743 ms | 16'038 ms | 15'480 ms |
-| EntityX | 30'000 | 100'000 | 3 | 33'709 ms | 67'798 ms | / | / |
-| CNtity | 100'000 | 100'000 | 5 | 15'195 ms | 36'691 ms | 32'948 ms | 31'123 ms |
-| EntityX | 100'000 | 100'000 | 5 | 72'244 ms | 145'751 ms | / | / |
-| CNtity | 10'000 | 1'000'000 | 1'000 | 136 ms | 243 ms | 278 ms | 288 ms |
-| EntityX | 10'000 | 1'000'000 | 1'000 | 9'160 ms | 8'377 ms | / | / |
-| CNtity | 100'000 | 1'000'000 | 1'000 | 790 ms | 2'205 ms | 2'053 ms | 2'018 ms |
-| EntityX | 100'000 | 1'000'000 | 1'000 | 94'978 ms | 86'477 ms | / | / |
+|   | Entities | Iterations | Probability | Create and add | `each` one component | `each` two component | `acquire` one component | `acquire` two component |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| CNtity | 1'000 | 100 | 3 | 0 ms | 0 ms | 0 ms | 0 ms | 0 ms |
+| EntityX | 1'000 | 100 | 3 | 0 ms | 0 ms | 1 ms | / | / |
+| CNtity | 1'000 | 1'000'000 | 3 | 5 ms | 822 ms | 794 ms | 452 ms | 613 ms |
+| EntityX | 1'000 | 1'000'000 | 3 | 0 ms | 7'232 ms | 15'455 ms | / | / |
+| CNtity | 10'000 | 1'000'000 | 3 | 45 ms | 9'596 ms | 9'329 ms | 6'601 ms | 8'329 ms |
+| EntityX | 10'000 | 1'000'000 | 3 | 0 ms | 75'593 ms | 156'918 ms | / | / |
+| CNtity | 30'000 | 100'000 | 3 | 152 ms | 6'765 ms | 6'629 ms | 5'714 ms | 6'067 ms |
+| EntityX | 30'000 | 100'000 | 3 | 2 ms | 22'821 ms | 46'955 ms | / | / |
+| CNtity | 100'000 | 100'000 | 5 | 390 ms | 13'926 ms | 13'762 ms | 11'551 ms | 12'374 ms |
+| EntityX | 100'000 | 100'000 | 5 | 9 ms | 47'783 ms | 96'316 ms | / | / |
+| CNtity | 10'000 | 1'000'000 | 1'000 | 40 ms | 54 ms | 61 ms | 43 ms | 50 ms |
+| EntityX | 10'000 | 1'000'000 | 1'000 | 0 ms | 5'427 ms | 6'653 ms | / | / |
+| CNtity | 100'000 | 1'000'000 | 1'000 | 322 ms | 245 ms | 237 ms | 137 ms | 185 ms |
+| EntityX | 100'000 | 1'000'000 | 1'000 | 9 ms | 56'767 ms | 65'578 ms | / | / |
