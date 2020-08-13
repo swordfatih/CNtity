@@ -63,11 +63,11 @@ int main()
     });
 
     //System 2
-    for(const auto& it: helper.acquire<std::string, Position>())
+    for(auto&& [entity, identity]: helper.acquire<std::string, Position>())
     {
-        if(*helper.get<std::string>(it) == "chat")
+        if(std::get<std::string>(identity) == "chat")
         {
-            auto position = helper.get<Position>(it);
+            auto position = helper.get<Position>(entity);
             position->x = 200;
             position->y = 70;
         }
