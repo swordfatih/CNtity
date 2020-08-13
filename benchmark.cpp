@@ -28,7 +28,7 @@ int main()
     {
         using namespace CNtity;
         Helper<int, std::string> helper;
-        std::cout << "CNtity for | entity: " << entityCount << " iteration: " << iterationCount << std::endl;
+        std::cout << "CNtity | entity: " << entityCount << " iteration: " << iterationCount << std::endl;
 
         {
             Timer timer("Add entities: ");
