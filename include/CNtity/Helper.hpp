@@ -360,7 +360,7 @@ public:
                     {
                         auto&& component = m_components[typeid(Type)][entity];
                         func(entity, &std::get<Type>(component));
-                        grouping[entity] = component;
+                        grouping[entity] = &component;
                     }
                 }
             }
@@ -368,7 +368,7 @@ public:
             {
                 for(auto&& [entity, component]: m_groupings[code])
                 {
-                    func(entity, const_cast<Type*>(&std::get<Type>(component)));
+                    func(entity, const_cast<Type*>(&std::get<Type>(*component)));
                 }
             }
         }
@@ -383,27 +383,33 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>& acquire()
+    tsl::hopscotch_map<Entity, std::variant<Component, Components ...>*>& acquire()
     {
-        if constexpr (sizeof...(Types) == 0)
-        {
-            return m_components[typeid(Type)];
-        }
-
         auto&& code = bitmask<Type, Types...>();
 
         if(m_groupings.count(code) == 0)
         {
-            std::type_index type(typeid(Type));
-            smallest<Type, Types...>(type);
+            std::type_index type{typeid(Type)};
+
+            if constexpr (sizeof...(Types) != 0)
+            {
+                smallest<Type, Types...>(type);
+            }
 
             m_groupings[code].reserve(m_components[type].size());
 
             for(auto&& [entity, component]: m_components[type])
             {
-                if(has<Type, Types...>(entity))
+                if constexpr (sizeof...(Types) != 0)
                 {
-                    m_groupings[code].insert(std::make_pair(entity, m_components[typeid(Type)][entity]));
+                    if(has<Type, Types...>(entity))
+                    {
+                        m_groupings[code].insert(std::make_pair(entity, &m_components[typeid(Type)][entity]));
+                    }
+                }
+                else
+                {
+                    m_groupings[code].insert(std::make_pair(entity, &m_components[typeid(Type)][entity]));
                 }
             }
         }
@@ -428,7 +434,7 @@ public:
         {
             if(group.count(entity) != 0)
             {
-                const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>&>(group).erase(entity);
+                const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>*>&>(group).erase(entity);
             }
         }
     }
@@ -462,7 +468,10 @@ private:
     {
         Mask code = (1 << std::type_index(typeid(Type)).hash_code());
 
-        ((code |= (1 << std::type_index(typeid(Types)).hash_code())), ...);
+        if constexpr (sizeof...(Types) != 0)
+        {
+            ((code |= (1 << std::type_index(typeid(Types)).hash_code())), ...);
+        }
 
         return code;
     }
@@ -481,7 +490,7 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>    m_components;    ///< Components
-    tsl::hopscotch_map<Mask, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>>>               m_groupings;     ///< Groupings
+    tsl::hopscotch_map<Mask, tsl::hopscotch_map<Entity, std::variant<Component, Components ...>*>>              m_groupings;     ///< Groupings
     std::vector<Entity>                                                                                         m_entities;      ///< Entities
 };
 
