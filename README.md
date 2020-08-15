@@ -65,7 +65,7 @@ int main()
     //System 2
     for(auto&& [entity, identity]: helper.acquire<std::string, Position>())
     {
-        if(std::get<std::string>(identity) == "chat")
+        if(std::get<std::string>(*identity) == "chat")
         {
             auto&& position = helper.get<Position>(entity);
             position->x = 200;
