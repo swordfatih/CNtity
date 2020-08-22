@@ -437,6 +437,8 @@ public:
                 const_cast<tsl::hopscotch_map<Entity, std::variant<Component, Components ...>*>&>(group).erase(entity);
             }
         }
+
+        m_entities.erase(std::find(m_entities.begin(), m_entities.end(), entity));
     }
 
 private:
