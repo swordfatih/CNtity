@@ -230,7 +230,7 @@ namespace uuids
          size_t m_byteCount;
       };
 
-      static std::mt19937 clock_gen(std::random_device{}());
+      static std::mt19937 clock_gen(std::chrono::high_resolution_clock::now().time_since_epoch().count());
       static std::uniform_int_distribution<short> clock_dis{ -32768, 32767 };
       static std::atomic_short clock_sequence = clock_dis(clock_gen);
    }
