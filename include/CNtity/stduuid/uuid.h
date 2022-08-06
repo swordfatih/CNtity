@@ -1,6 +1,6 @@
 #pragma once
-#ifndef UUID_H
-#define UUID_H
+#ifndef STDUUID_H
+#define STDUUID_H
 
 #include <cstring>
 #include <string>
@@ -798,4 +798,4 @@ namespace std
    };
 }
 
-#endif // UUID_H
+#endif // STDUUID_H
