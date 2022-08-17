@@ -468,14 +468,14 @@ private:
     template <typename Type, typename ... Types>
     Mask bitmask()
     {
-        Mask code = (1 << std::type_index(typeid(Type)).hash_code());
+        std::string hash = std::to_string(1 << std::type_index(typeid(Type)).hash_code());
 
         if constexpr (sizeof...(Types) != 0)
         {
-            ((code |= (1 << std::type_index(typeid(Types)).hash_code())), ...);
+            ((hash += std::to_string(1 << std::type_index(typeid(Types)).hash_code())), ...);
         }
 
-        return code;
+        return std::hash<std::string>{}(hash);
     }
 
     ////////////////////////////////////////////////////////////
