@@ -105,7 +105,7 @@ public:
         std::vector<Entity> entities;
         entities.reserve(m_entities.size());
 
-        for(auto&& [entity, mask]: m_entities)
+        for(auto&& entity: m_entities)
         {
             entities.push_back(entity);
         }
