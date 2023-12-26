@@ -1,15 +1,3 @@
-# CNtity
-CNtity (Chats Noirs Entity) is a header-only helper library for an Entity Component System (ECS) implementation using C++17. It is actually in development by Fatih#6810 (accfldekur@gmail.com) from *Moonlit Black Cats*.
-***
-
-### How to use
-
-CNtity is header-only, you just need a compiler that supports C++17 and to include `CNtity/Helper.hpp` after downloading files in the include directory.
-
-**Example code**
-
-An example code showing how maniable CNtity is!
-```cpp
 //CNtity
 #include "CNtity/Helper.hpp"
 
@@ -78,4 +66,3 @@ int main()
 
     return 0;
 }
-```

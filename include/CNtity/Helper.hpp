@@ -36,6 +36,7 @@
 #include <functional>
 #include <typeindex>
 #include <algorithm>
+#include <tuple>
 
 //tsl
 #include "CNtity/tsl/hopscotch_map.h"
@@ -49,6 +50,9 @@ namespace CNtity
 ////////////////////////////////////////////////////////////
 using Entity = uuids::uuid;     ///< Entities are only unique identifiers
 using Mask = uint_least32_t;    ///< Bitmask
+
+template <typename Type, typename ... Types> 
+using Tuple = std::tuple<Type&, Types&...>; ///< Tuple of components
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
@@ -199,7 +203,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    Type* add(const Entity& entity, const Type& type, const Types& ... types)
+    Tuple<Type, Types...> add(const Entity& entity, const Type& type, const Types& ... types)
     {
         m_components[typeid(Type)].insert(std::make_pair(entity, type));
 
@@ -210,7 +214,7 @@ public:
 
         m_groupings.clear();
 
-        return get<Type>(entity);
+        return get<Type, Types...>(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -233,17 +237,10 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get a component of a specified entity
-    ///
-    /// \param entity Entity
-    ///
-    /// \return Pointer to the component
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename Type>
-    Type* get(const Entity& entity)
+    template <typename Type, typename ... Types>
+    Tuple<Type, Types...> get(const Entity& entity)
     {
-        return std::get_if<Type>(&m_components[typeid(Type)].at(entity));
+        return std::tie(*std::get_if<Type>(&m_components[typeid(Type)].at(entity)), *std::get_if<Types>(&m_components[typeid(Types)].at(entity))...);   
     }
 
     ////////////////////////////////////////////////////////////
@@ -325,6 +322,7 @@ public:
         return false;
     }
 
+
     ////////////////////////////////////////////////////////////
     /// \brief Execute a function for every entities that
     /// contain specified components
@@ -333,42 +331,25 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    void for_each(std::function<void(Entity, Type*)> func)
+    void for_each(std::function<void(Entity, Tuple<Type, Types...>)> func)
     {
         if constexpr (sizeof...(Types) == 0)
         {
             for(auto& [entity, component]: m_components[typeid(Type)])
             {
-                func(entity, const_cast<Type*>(&std::get<Type>(component)));
+                func(entity, get<Type>(entity));
             }
         }
         else
         {
-            auto&& code = bitmask<Type, Types...>();
+            std::type_index type(typeid(Type));
+            smallest<Types...>(type);
 
-            if(m_groupings.count(code) == 0)
+            for(auto&& [entity, variant]: m_components[type])
             {
-                std::type_index type(typeid(Type));
-                smallest<Types...>(type);
-
-                auto&& grouping = m_groupings[code];
-                grouping.reserve(m_components[type].size());
-
-                for(auto&& [entity, variant]: m_components[type])
+                if(has<Type, Types...>(entity))
                 {
-                    if(has<Type, Types...>(entity))
-                    {
-                        auto&& component = m_components[typeid(Type)][entity];
-                        func(entity, &std::get<Type>(component));
-                        grouping[entity] = &component;
-                    }
-                }
-            }
-            else
-            {
-                for(auto&& [entity, component]: m_groupings[code])
-                {
-                    func(entity, const_cast<Type*>(&std::get<Type>(*component)));
+                    func(entity, get<Type, Types...>(entity));
                 }
             }
         }
@@ -383,38 +364,32 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Type, typename ... Types>
-    tsl::hopscotch_map<Entity, std::variant<Component, Components ...>*>& acquire()
+    tsl::hopscotch_map<Entity, Tuple<Type, Types...>> acquire()
     {
-        auto&& code = bitmask<Type, Types...>();
+        tsl::hopscotch_map<Entity, Tuple<Type, Types...>> map;
 
-        if(m_groupings.count(code) == 0)
+        if constexpr (sizeof...(Types) == 0)
         {
-            std::type_index type{typeid(Type)};
-
-            if constexpr (sizeof...(Types) != 0)
+            for(auto& [entity, component]: m_components[typeid(Type)])
             {
-                smallest<Type, Types...>(type);
+                map.emplace(std::make_pair(entity, get<Type>(entity)));
             }
+        }
+        else
+        {
+            std::type_index type(typeid(Type));
+            smallest<Types...>(type);
 
-            m_groupings[code].reserve(m_components[type].size());
-
-            for(auto&& [entity, component]: m_components[type])
+            for(auto&& [entity, variant]: m_components[type])
             {
-                if constexpr (sizeof...(Types) != 0)
+                if(has<Type, Types...>(entity))
                 {
-                    if(has<Type, Types...>(entity))
-                    {
-                        m_groupings[code].insert(std::make_pair(entity, &m_components[typeid(Type)][entity]));
-                    }
-                }
-                else
-                {
-                    m_groupings[code].insert(std::make_pair(entity, &m_components[typeid(Type)][entity]));
+                    map.emplace(std::make_pair(entity, get<Type, Types...>(entity)));
                 }
             }
         }
 
-        return m_groupings[code];
+        return map;
     }
 
     ////////////////////////////////////////////////////////////
