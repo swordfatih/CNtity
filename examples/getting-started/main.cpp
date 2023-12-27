@@ -39,23 +39,19 @@ int main()
     position.x += 50;
 
     //System 1
-    helper.for_each<std::string, Position>({[](auto entity, auto tuple)
+    helper.each<std::string, Position>([](auto entity, auto name, auto& position)
     {       
-        auto [name, position] = tuple;
-
         if(name == "chat")
         {
             position.x += 10;
         }
 
         std::cout << name << std::endl;  
-    }});
+    });
 
     //System 2
-    for(auto [entity, tuple]: helper.acquire<std::string, Position>())
+    for(auto [entity, name, position]: helper.each<std::string, Position>())
     {
-        auto [name, position] = tuple;
-
         if(name == "chat")
         {
             position.x += 200; 
@@ -72,9 +68,9 @@ int main()
         position.x += 5;
     }
 
-    if(helper.has<Health>(chat))
+    if(helper.has<Health, Position>(chat))
     {
-        auto [health] = helper.get<Health>(chat);
+        auto [health, position] = helper.get<Health, Position>(chat);
         health.current += 5;
         std::cout << health.current << std::endl; 
     }

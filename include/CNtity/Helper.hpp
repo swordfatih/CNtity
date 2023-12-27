@@ -50,7 +50,6 @@ namespace CNtity
 
 ////////////////////////////////////////////////////////////
 using Entity = uuids::uuid;     ///< Entities are only unique identifiers
-using Mask = uint_least32_t;    ///< Bitmask
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
@@ -65,7 +64,7 @@ public:
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    Helper() : m_components(), m_groupings(), m_entities()
+    Helper() : m_components(), m_entities()
     {
 
     }
@@ -202,8 +201,6 @@ public:
     {
         (m_components[typeid(types)].insert(std::make_pair(entity, types)), ...);
 
-        m_groupings.clear();
-
         return get<Types...>(entity);
     }
 
@@ -217,8 +214,6 @@ public:
     void remove(const Entity& entity)
     {
         (m_components[typeid(Types)].erase(entity), ...);
-
-        m_groupings.clear();
     }
 
     ////////////////////////////////////////////////////////////
@@ -304,11 +299,11 @@ public:
     /// \brief Execute a callback for every entities that
     /// contain specified components
     ///
-    /// \param func Callback
+    /// \param callback Callback
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    void for_each(std::function<void(Entity, std::tuple<Types&...>)> func)
+    template <typename ... Types, typename Function>
+    void each(Function callback)
     {
         std::type_index type(typeid(std::tuple_element_t<0, std::tuple<Types&...>>));
         smallest<Types...>(type);
@@ -317,7 +312,10 @@ public:
         {
             if(has<Types...>(entity))
             {
-                func(entity, get<Types...>(entity));
+                std::apply([&callback, &entity](Types& ... args) 
+                {
+                    callback(entity, args...);
+                }, get<Types...>(entity));
             }
         }
     }
@@ -330,9 +328,9 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename ... Types>
-    tsl::hopscotch_map<Entity, std::tuple<Types&...>> acquire()
+    std::vector<std::tuple<Entity, Types&...>> each()
     {
-        tsl::hopscotch_map<Entity, std::tuple<Types&...>> map;
+        std::vector<std::tuple<Entity, Types&...>> values;
 
         std::type_index type(typeid(std::tuple_element_t<0, std::tuple<Types&...>>));
         smallest<Types...>(type);
@@ -341,11 +339,11 @@ public:
         {
             if(has<Types...>(entity))
             {
-                map.emplace(std::make_pair(entity, get<Types...>(entity)));
+                values.push_back(std::tuple_cat(std::make_tuple(entity), get<Types...>(entity)));
             }
         }
 
-        return map;
+        return values;
     }
 
     ////////////////////////////////////////////////////////////
@@ -359,14 +357,6 @@ public:
         for(auto& [component, entities]: m_components)
         {
             const_cast<tsl::hopscotch_map<Entity, std::variant<Components ...>>&>(entities).erase(entity);
-        }
-
-        for(auto& [mask, group]: m_groupings)
-        {
-            if(group.count(entity))
-            {
-                const_cast<tsl::hopscotch_map<Entity, std::variant<Components ...>*>&>(group).erase(entity);
-            }
         }
 
         m_entities.erase(entity);
@@ -406,7 +396,6 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Components ...>>>    m_components;    ///< Components
-    tsl::hopscotch_map<Mask, tsl::hopscotch_map<Entity, std::variant<Components ...>*>>              m_groupings;     ///< Groupings
     std::unordered_set<Entity>                                                                       m_entities;      ///< Entities
 };
 
