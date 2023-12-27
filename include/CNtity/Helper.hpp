@@ -32,6 +32,7 @@
 //Standard
 #include <cstdint>
 #include <vector>
+#include <variant>
 #include <any>
 #include <functional>
 #include <typeindex>
@@ -109,6 +110,23 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    template <typename ... Components>
+    std::vector<Entity> entities()
+    {
+        std::vector<Entity> entities;
+
+        for(auto& [entity, _]: m_components[smallest<Components...>()])
+        {
+            if(has<Components...>(entity))
+            {
+                entities.push_back(entity);
+            }
+        }
+
+        return entities;
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Create entity without any component
     ///
     /// \param identifier Use a defined identifier for the new
@@ -121,7 +139,7 @@ public:
     ////////////////////////////////////////////////////////////
     Entity create(Entity identifier = {})
     {
-        if(identifier.is_nil() || m_entities.count(identifier))
+        if(identifier.is_nil() || match(identifier))
         {
             identifier = uuids::uuid_random_generator{random_generator()}();
         }
@@ -170,6 +188,33 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Erase a specified entity
+    ///
+    /// \param entity Entity
+    ///
+    ////////////////////////////////////////////////////////////
+    void erase(const Entity& entity)
+    {
+        for(auto& [component, entities]: m_components)
+        {
+            const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).erase(entity);
+        }
+
+        m_entities.erase(entity);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Check if a given entity identifier exists
+    ///
+    /// \param entity Entity
+    ///
+    ////////////////////////////////////////////////////////////
+    bool match(const Entity& entity)
+    {
+        return m_entities.count(entity);
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Add components to a specified entity
     ///
     /// \param entity Entity
@@ -181,7 +226,7 @@ public:
     template <typename ... Components>
     std::tuple<Components&...> add(const Entity& entity, const Components& ... components)
     {
-        (m_components[typeid(components)].insert(std::make_pair(entity, components)), ...);
+        ((m_components[typeid(components)][entity] = components), ...);
 
         return get<Components...>(entity);
     }
@@ -213,49 +258,72 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get a component of a specified entity by its
-    /// index. This function adds a new component to the entity
-    /// if it doesn't already exist. This function is useful for
-    /// serialization and is supposed to be used with std::visit
-    ///
-    /// This function works only if all the components are
-    /// default constructible. Or at least don't require
-    /// parameters for construction
+    /// \brief Visit a component of a specified entity by its
+    /// runtime index for given possible types. This function 
+    /// adds a new component to the entity if it doesn't already
+    /// exist
     ///
     /// \param entity Entity
     /// \param index Index of the component
-    ///
-    /// \return Pointer to the component as variant
+    /// \param visitor Visitor function
     ///
     ////////////////////////////////////////////////////////////
-    std::any get(const Entity& entity, std::type_index index)
+    template <typename ... Components, typename Function>
+    void visit(const Entity& entity, std::type_index index, Function visitor)
     {
-        return m_components[index][entity];
+        ([this, &entity, &visitor, &index]
+        {
+            if(typeid(Components).name() == index.name() && has<Components>(entity))
+            {
+                visitor(std::get<0>(get<Components>(entity)));
+            }
+        }(), ...);
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Retrieve every components associated to a specified
-    /// entity
+    /// \brief Visit all components associated to a specified
+    /// entity for given possible types
     ///
     /// \param entity Entity
-    ///
-    /// \return Pointers to every components associated to the
-    /// entity
+    /// \param visitor Visitor function
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<std::reference_wrapper<std::any>> get(const Entity& entity)
+    template <typename ... Components, typename Function>
+    void visit(const Entity& entity, Function visitor)
     {
-        std::vector<std::reference_wrapper<std::any>> components;
+        ([this, &entity, &visitor]
+        {
+            if(auto tuple = get_if<Components>(entity))
+            {
+                visitor(std::get<0>(*tuple));
+            }
+        }(), ...);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Copy components of an entity to another
+    ///
+    /// \brief source Source entity
+    /// \brief destination Destination entity
+    ///
+    ////////////////////////////////////////////////////////////
+    Entity duplicate(const Entity& source, Entity destination = {})
+    {
+        if(destination.is_nil() || !match(destination))
+        {
+            destination = create();
+        }
 
         for(auto& [component, entities]: m_components)
         {
-            if(entities.count(entity))
+            if(entities.count(source))
             {
-                components.push_back(const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).at(entity));
+                auto& map = const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities);
+                map.emplace(std::make_pair(destination, map[source]));
             }
         }
 
-        return components;
+        return destination;
     }
 
     ////////////////////////////////////////////////////////////
@@ -282,21 +350,15 @@ public:
     template <typename ... Components, typename Function>
     void each(Function callback)
     {
-        for(auto& [entity, variant]: m_components[smallest<Components...>()])
+        for(auto entity: entities<Components...>())
         {
-            if(has<Components...>(entity))
-            {
-                std::apply([&callback, &entity](Components& ... components) 
-                {
-                    callback(entity, components...);
-                }, get<Components...>(entity));
-            }
+            callback(entity, get<Components...>(entity));
         }
     }
 
     ////////////////////////////////////////////////////////////
     /// \brief Acquire entities that contains specified
-    /// components
+    /// components to iterate on
     ///
     /// \return Map of entities with specified components
     ///
@@ -306,31 +368,12 @@ public:
     {
         std::vector<std::tuple<Entity, Components&...>> values;
 
-        for(auto& [entity, variant]: m_components[smallest<Components...>()])
+        for(auto entity: entities<Components...>())
         {
-            if(has<Components...>(entity))
-            {
-                values.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
-            }
+            values.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
         }
 
         return values;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Erase a specified entity
-    ///
-    /// \param entity Entity
-    ///
-    ////////////////////////////////////////////////////////////
-    void erase(const Entity& entity)
-    {
-        for(auto& [component, entities]: m_components)
-        {
-            const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).erase(entity);
-        }
-
-        m_entities.erase(entity);
     }
 
 private:
@@ -358,10 +401,22 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Generate key for given components without order
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename ... Components>
+    std::string mask()
+    {
+        std::string mask;
+        ((mask += typeid(Components).name()), ...);
+        return mask;
+    }
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::any>>    m_components;    ///< Components
-    std::unordered_set<Entity>                                                   m_entities;      ///< Entities
+    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::any>>   m_components;   ///< Components
+    std::unordered_set<Entity>                                                  m_entities;     ///< Entities
 };
 
 } // namespace CNtity
