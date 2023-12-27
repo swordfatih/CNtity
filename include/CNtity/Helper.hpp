@@ -86,46 +86,26 @@ public:
     ////////////////////////////////////////////////////////////
     std::vector<std::type_index> components() const
     {
-        std::vector<std::type_index> indexes;
+        std::vector<std::type_index> components;
+        components.reserve(m_components.size());
 
-        for(auto [key, _]: m_components) 
+        for(const auto& [key, _]: m_components) 
         {
-            indexes.push_back(key);
+            components.push_back(key);
         }
 
-        return indexes;
+        return components;
     }
 
     ////////////////////////////////////////////////////////////
     /// \brief Get all the entities
     ///
-    /// \return unique identifier of every entities in an array
+    /// \return unique identifier of every entities in a set
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<Entity> entities()
+    const std::unordered_set<Entity>& entities()
     {
-        std::vector<Entity> entities;
-        entities.reserve(m_entities.size());
-
-        for(auto&& entity: m_entities)
-        {
-            entities.push_back(entity);
-        }
-
-        return entities;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Check if an entity matchs with a given identifier
-    ///
-    /// \param identifier Unique identifier
-    ///
-    /// \return True if the identifier exists
-    ///
-    ////////////////////////////////////////////////////////////
-    bool match(const uuids::uuid& identifier)
-    {
-        return m_entities.count(identifier);
+        return m_entities;
     }
 
     ////////////////////////////////////////////////////////////
@@ -139,9 +119,9 @@ public:
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    Entity create(uuids::uuid identifier = {})
+    Entity create(Entity identifier = {})
     {
-        if(identifier.is_nil() || match(identifier))
+        if(identifier.is_nil() || m_entities.count(identifier))
         {
             identifier = uuids::uuid_random_generator{random_generator()}();
         }
@@ -154,17 +134,17 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Create entity with components
     ///
-    /// \param types Components
+    /// \param components Components
     ///
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    Entity create(const Types& ... types)
+    template <typename ... Components>
+    Entity create(const Components& ... components)
     {
-        Entity&& entity = create();
+        Entity entity = create();
 
-        add(entity, types ...);
+        add(entity, components ...);
 
         return entity;
     }
@@ -174,17 +154,17 @@ public:
     /// identifier
     ///
     /// \param identifier Defined identifier
-    /// \param types Components
+    /// \param components Components
     ///
     /// \return Created entity
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    Entity create(const uuids::uuid& identifier, const Types& ... types)
+    template <typename ... Components>
+    Entity create(Entity identifier, const Components& ... components)
     {
         Entity entity = create(identifier);
 
-        add(entity, types ...);
+        add(entity, components ...);
 
         return entity;
     }
@@ -193,17 +173,17 @@ public:
     /// \brief Add components to a specified entity
     ///
     /// \param entity Entity
-    /// \param types Components
+    /// \param components Components
     ///
     /// \return Pointer to the added component
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    std::tuple<Types&...> add(const Entity& entity, const Types& ... types)
+    template <typename ... Components>
+    std::tuple<Components&...> add(const Entity& entity, const Components& ... components)
     {
-        (m_components[typeid(types)].insert(std::make_pair(entity, types)), ...);
+        (m_components[typeid(components)].insert(std::make_pair(entity, components)), ...);
 
-        return get<Types...>(entity);
+        return get<Components...>(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -212,29 +192,24 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
+    template <typename ... Components>
     void remove(const Entity& entity)
     {
-        (m_components[typeid(Types)].erase(entity), ...);
+        (m_components[typeid(Components)].erase(entity), ...);
     }
 
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    std::tuple<Types&...> get(const Entity& entity)
+    template <typename ... Components>
+    std::tuple<Components&...> get(const Entity& entity)
     {
-        return std::tie(std::any_cast<Types&>(m_components[typeid(Types)].at(entity))...);   
+        return std::tie(std::any_cast<Components&>(m_components[typeid(Components)].at(entity))...);   
     }
 
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    std::optional<std::tuple<Types&...>> get_if(const Entity& entity)
+    template <typename ... Components>
+    std::optional<std::tuple<Components&...>> get_if(const Entity& entity)
     {
-        if(!has<Types...>(entity))
-        {
-            return std::nullopt;
-        }
-
-        return std::make_optional(get<Types...>(entity));   
+        return has<Components...>(entity) ? std::make_optional(get<Components...>(entity)) : std::nullopt;   
     }
 
     ////////////////////////////////////////////////////////////
@@ -253,7 +228,7 @@ public:
     /// \return Pointer to the component as variant
     ///
     ////////////////////////////////////////////////////////////
-    std::any& get_by_index(const Entity& entity, std::type_index index)
+    std::any get(const Entity& entity, std::type_index index)
     {
         return m_components[index][entity];
     }
@@ -268,15 +243,15 @@ public:
     /// entity
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<std::any*> retrieve(const Entity& entity)
+    std::vector<std::reference_wrapper<std::any>> get(const Entity& entity)
     {
-        std::vector<std::any*> components;
+        std::vector<std::reference_wrapper<std::any>> components;
 
         for(auto& [component, entities]: m_components)
         {
             if(entities.count(entity))
             {
-                components.push_back(const_cast<std::any*>(&entities.at(entity)));
+                components.push_back(const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).at(entity));
             }
         }
 
@@ -291,10 +266,10 @@ public:
     /// \return True if the entity has the component
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
+    template <typename ... Components>
     bool has(const Entity& entity)
     {
-        return (m_components[typeid(Types)].count(entity) && ...);
+        return (m_components[typeid(Components)].count(entity) && ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -304,20 +279,17 @@ public:
     /// \param callback Callback
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types, typename Function>
+    template <typename ... Components, typename Function>
     void each(Function callback)
     {
-        std::type_index type(typeid(std::tuple_element_t<0, std::tuple<Types&...>>));
-        smallest<Types...>(type);
-
-        for(auto&& [entity, variant]: m_components[type])
+        for(auto& [entity, variant]: m_components[smallest<Components...>()])
         {
-            if(has<Types...>(entity))
+            if(has<Components...>(entity))
             {
-                std::apply([&callback, &entity](Types& ... args) 
+                std::apply([&callback, &entity](Components& ... components) 
                 {
-                    callback(entity, args...);
-                }, get<Types...>(entity));
+                    callback(entity, components...);
+                }, get<Components...>(entity));
             }
         }
     }
@@ -329,19 +301,16 @@ public:
     /// \return Map of entities with specified components
     ///
     ////////////////////////////////////////////////////////////
-    template <typename ... Types>
-    std::vector<std::tuple<Entity, Types&...>> each()
+    template <typename ... Components>
+    std::vector<std::tuple<Entity, Components&...>> each()
     {
-        std::vector<std::tuple<Entity, Types&...>> values;
+        std::vector<std::tuple<Entity, Components&...>> values;
 
-        std::type_index type(typeid(std::tuple_element_t<0, std::tuple<Types&...>>));
-        smallest<Types...>(type);
-
-        for(auto&& [entity, variant]: m_components[type])
+        for(auto& [entity, variant]: m_components[smallest<Components...>()])
         {
-            if(has<Types...>(entity))
+            if(has<Components...>(entity))
             {
-                values.push_back(std::tuple_cat(std::make_tuple(entity), get<Types...>(entity)));
+                values.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
             }
         }
 
@@ -366,22 +335,16 @@ public:
 
 private:
     ////////////////////////////////////////////////////////////
-    /// \brief Compare components on the amount of entities
-    /// containing them
+    /// \brief Get the component containing the least amount of
+    /// entities
     ///
     ////////////////////////////////////////////////////////////
-    template <typename Type, typename ... Types>
-    void smallest(std::type_index& component)
+    template<typename ... Components>
+    std::type_index smallest()
     {
-        if(m_components[typeid(Type)].size() < m_components[component].size())
-        {
-            component = typeid(Type);
-        }
-
-        if constexpr (sizeof...(Types) != 0)
-        {
-            smallest<Types ...>(component);
-        }
+        std::type_index component(typeid(std::tuple_element_t<0, std::tuple<Components&...>>));
+        ((component = m_components[typeid(Components)].size() < m_components[component].size() ? typeid(Components) : component), ...);
+        return component;
     }
 
     ////////////////////////////////////////////////////////////

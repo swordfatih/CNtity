@@ -38,8 +38,10 @@ int main()
     auto [position] = helper.add<Position>(chat, {50, 50});
     position.x += 50;
 
+    std::any_cast<Health&>(helper.get(chat)[0].get()) = {50, 50};
+
     //System 1
-    helper.each<std::string, Position>([](auto entity, auto name, auto& position)
+    helper.each<std::string, Position, int>([&helper](auto entity, auto name, auto& position, auto _)
     {       
         if(name == "chat")
         {
@@ -66,6 +68,7 @@ int main()
         auto [health, position] = *values;
         health.current += 10;
         position.x += 5;
+        std::cout << health.current << std::endl;
     }
 
     if(helper.has<Health, Position>(chat))
