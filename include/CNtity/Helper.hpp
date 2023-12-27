@@ -32,7 +32,7 @@
 //Standard
 #include <cstdint>
 #include <vector>
-#include <variant>
+#include <any>
 #include <functional>
 #include <typeindex>
 #include <algorithm>
@@ -56,7 +56,6 @@ using Entity = uuids::uuid;     ///< Entities are only unique identifiers
 /// Component System architecture
 ///
 ////////////////////////////////////////////////////////////
-template <typename ... Components>
 class Helper
 {
 public:
@@ -89,7 +88,10 @@ public:
     {
         std::vector<std::type_index> indexes;
 
-        (indexes.push_back(typeid(Components)), ...);
+        for(auto [key, _]: m_components) 
+        {
+            indexes.push_back(key);
+        }
 
         return indexes;
     }
@@ -100,7 +102,7 @@ public:
     /// \return unique identifier of every entities in an array
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<Entity>&& entities()
+    std::vector<Entity> entities()
     {
         std::vector<Entity> entities;
         entities.reserve(m_entities.size());
@@ -110,7 +112,7 @@ public:
             entities.push_back(entity);
         }
 
-        return std::move(entities);
+        return entities;
     }
 
     ////////////////////////////////////////////////////////////
@@ -180,7 +182,7 @@ public:
     template <typename ... Types>
     Entity create(const uuids::uuid& identifier, const Types& ... types)
     {
-        Entity&& entity = create(identifier);
+        Entity entity = create(identifier);
 
         add(entity, types ...);
 
@@ -220,7 +222,7 @@ public:
     template <typename ... Types>
     std::tuple<Types&...> get(const Entity& entity)
     {
-        return std::tie(std::get<Types>(m_components[typeid(Types)].at(entity))...);   
+        return std::tie(std::any_cast<Types&>(m_components[typeid(Types)].at(entity))...);   
     }
 
     ////////////////////////////////////////////////////////////
@@ -251,7 +253,7 @@ public:
     /// \return Pointer to the component as variant
     ///
     ////////////////////////////////////////////////////////////
-    std::variant<Components...>& get_by_index(const Entity& entity, std::type_index index)
+    std::any& get_by_index(const Entity& entity, std::type_index index)
     {
         return m_components[index][entity];
     }
@@ -266,15 +268,15 @@ public:
     /// entity
     ///
     ////////////////////////////////////////////////////////////
-    std::vector<std::variant<Components ...>*> retrieve(const Entity& entity)
+    std::vector<std::any*> retrieve(const Entity& entity)
     {
-        std::vector<std::variant<Components ...>*> components;
+        std::vector<std::any*> components;
 
         for(auto& [component, entities]: m_components)
         {
             if(entities.count(entity))
             {
-                components.push_back(const_cast<std::variant<Components ...>*>(&entities.at(entity)));
+                components.push_back(const_cast<std::any*>(&entities.at(entity)));
             }
         }
 
@@ -356,7 +358,7 @@ public:
     {
         for(auto& [component, entities]: m_components)
         {
-            const_cast<tsl::hopscotch_map<Entity, std::variant<Components ...>>&>(entities).erase(entity);
+            const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).erase(entity);
         }
 
         m_entities.erase(entity);
@@ -395,8 +397,8 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::variant<Components ...>>>    m_components;    ///< Components
-    std::unordered_set<Entity>                                                                       m_entities;      ///< Entities
+    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::any>>    m_components;    ///< Components
+    std::unordered_set<Entity>                                                   m_entities;      ///< Entities
 };
 
 } // namespace CNtity

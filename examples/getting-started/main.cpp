@@ -27,10 +27,10 @@ struct Health
 int main()
 {
     //Helper
-    CNtity::Helper<Position, Velocity, Health, std::string> helper;
+    CNtity::Helper helper;
 
     //Creating entities
-    auto chat = helper.create<std::string, Health>("chat", {100, 80});
+    auto chat = helper.create<std::string, Health, int>("chat", {100, 80}, 10);
     helper.create<std::string>("chien");
     helper.create<std::string, Position>("velociraptor", {25, 70});
 
