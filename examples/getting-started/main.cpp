@@ -70,6 +70,17 @@ constexpr bool has_serializer(Type& object)
 }
 
 ////////////////////////////////////////////////////////////
+void print(const CNtity::Entity& e, const std::string& name, Position& position)
+{     
+    if(name == "chat")
+    {
+        position.x += 10;
+    }
+
+    std::cout << name << std::endl;  
+}
+
+////////////////////////////////////////////////////////////
 int main()
 {
     //Helper
@@ -90,7 +101,6 @@ int main()
 
     //Entities
     std::cout << helper.entities().size() << std::endl;
-    std::cout << helper.entities<Position>().size() << std::endl;
 
     //Visit components of an entity
     helper.visit<Position, std::string, Health>(chat, [](auto component)
@@ -101,19 +111,14 @@ int main()
         }
     });
 
-    //System 1
-    helper.each<std::string, Position>([&helper](auto entity, auto name, auto& position)
-    {       
-        if(name == "chat")
-        {
-            position.x += 10;
-        }
+    //View
+    auto view = helper.view<std::string, Position>();
 
-        std::cout << name << std::endl;  
-    });
+    //System 1
+    view.each(print);
 
     //System 2
-    for(auto [entity, name, position]: helper.each<std::string, Position>())
+    for(auto [entity, name, position]: view.each())
     {
         if(name == "chat")
         {

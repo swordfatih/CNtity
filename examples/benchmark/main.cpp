@@ -47,9 +47,12 @@ int main()
         {
             Timer timer("For_each entities one component: ");
             std::uint64_t sum = 0;
+
+            auto view = helper.view<int>();
+
             for(int i = 0; i < iterationCount; ++i)
             {
-                helper.each<int>([&](auto ent, auto tuple)
+                view.each([&](auto ent, auto num)
                 {
                     sum += num;
                 });
@@ -59,9 +62,12 @@ int main()
         {
             Timer timer("For_each entities two component: ");
             std::uint64_t sum = 0;
+
+            auto view = helper.view<int, std::string>();
+            
             for(int i = 0; i < iterationCount; ++i)
             {
-                helper.each<int, std::string>([&](auto ent, auto num, auto _)
+                view.each([&](auto ent, auto num, auto name)
                 {
                     sum += num;
                 });
@@ -71,9 +77,12 @@ int main()
         {
             Timer timer("Acquire entities one component: ");
             std::uint64_t sum = 0;
+
+            auto view = helper.view<int>();
+
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num]: helper.each<int>())
+                for(auto [entity, num]: view.each())
                 {
                     sum += num;
                 };
@@ -83,9 +92,12 @@ int main()
         {
             Timer timer("Acquire entities two component: ");
             std::uint64_t sum = 0;
+
+            auto view = helper.view<int, std::string>();
+
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num, _]: helper.each<int, std::string>())
+                for(auto [entity, num, _]: view.each())
                 {
                     sum += num;
                 };

@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
 // CNtity - Chats Noirs Entity Component System Helper
-// Copyright (c) 2018 - 2020 Fatih (accfldekur@gmail.com)
+// Copyright (c) 2018 - 2023 Fatih (accfldekur@gmail.com)
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -30,18 +30,10 @@
 // Headers
 ////////////////////////////////////////////////////////////
 //Standard
-#include <cstdint>
-#include <vector>
-#include <variant>
-#include <any>
-#include <functional>
 #include <typeindex>
-#include <algorithm>
-#include <tuple>
-#include <unordered_set>
-
-//tsl
-#include "CNtity/tsl/hopscotch_map.h"
+#include <set>
+#include <map>
+#include <any>
 
 //stduuid
 #include "CNtity/stduuid/uuid.h"
@@ -51,6 +43,10 @@ namespace CNtity
 
 ////////////////////////////////////////////////////////////
 using Entity = uuids::uuid;     ///< Entities are only unique identifiers
+
+////////////////////////////////////////////////////////////
+template <typename ... Components>
+class View;
 
 ////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
@@ -104,22 +100,22 @@ public:
     /// \return unique identifier of every entities in a set
     ///
     ////////////////////////////////////////////////////////////
-    const std::unordered_set<Entity>& entities()
+    const std::set<Entity>& entities()
     {
         return m_entities;
     }
 
     ////////////////////////////////////////////////////////////
     template <typename ... Components>
-    std::vector<Entity> entities()
+    std::vector<std::tuple<Entity, Components&...>> entities()
     {
-        std::vector<Entity> entities;
+        std::vector<std::tuple<Entity, Components&...>> entities;
 
         for(auto& [entity, _]: m_components[smallest<Components...>()])
         {
             if(has<Components...>(entity))
             {
-                entities.push_back(entity);
+                entities.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
             }
         }
 
@@ -197,7 +193,8 @@ public:
     {
         for(auto& [component, entities]: m_components)
         {
-            const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities).erase(entity);
+            const_cast<std::map<Entity, std::any>&>(entities).erase(entity);
+            notify(component);
         }
 
         m_entities.erase(entity);
@@ -227,6 +224,8 @@ public:
     std::tuple<Components&...> add(const Entity& entity, const Components& ... components)
     {
         ((m_components[typeid(components)][entity] = components), ...);
+        
+        (notify(typeid(Components)), ...);
 
         return get<Components...>(entity);
     }
@@ -241,6 +240,8 @@ public:
     void remove(const Entity& entity)
     {
         (m_components[typeid(Components)].erase(entity), ...);
+        
+        (notify(typeid(Components)), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -301,6 +302,17 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    template <typename ... Components>
+    View<Components...> view()
+    {
+        View<Components...> view(*this);
+
+        (view.observe(m_views[typeid(Components)].emplace_back()), ...);
+
+        return view;
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Copy components of an entity to another
     ///
     /// \brief source Source entity
@@ -318,8 +330,10 @@ public:
         {
             if(entities.count(source))
             {
-                auto& map = const_cast<tsl::hopscotch_map<Entity, std::any>&>(entities);
+                auto& map = const_cast<std::map<Entity, std::any>&>(entities);
                 map.emplace(std::make_pair(destination, map[source]));
+                
+                notify(component);
             }
         }
 
@@ -338,42 +352,6 @@ public:
     bool has(const Entity& entity)
     {
         return (m_components[typeid(Components)].count(entity) && ...);
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Execute a callback for every entities that
-    /// contain specified components
-    ///
-    /// \param callback Callback
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename ... Components, typename Function>
-    void each(Function callback)
-    {
-        for(auto entity: entities<Components...>())
-        {
-            callback(entity, get<Components...>(entity));
-        }
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Acquire entities that contains specified
-    /// components to iterate on
-    ///
-    /// \return Map of entities with specified components
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename ... Components>
-    std::vector<std::tuple<Entity, Components&...>> each()
-    {
-        std::vector<std::tuple<Entity, Components&...>> values;
-
-        for(auto entity: entities<Components...>())
-        {
-            values.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
-        }
-
-        return values;
     }
 
 private:
@@ -401,22 +379,97 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Generate key for given components without order
-    ///
-    ////////////////////////////////////////////////////////////
     template <typename ... Components>
-    std::string mask()
+    void notify(const std::type_index& component)
     {
-        std::string mask;
-        ((mask += typeid(Components).name()), ...);
-        return mask;
+        auto& observers = m_views[component];
+        for(auto it = observers.begin(); it != observers.end();)
+        {
+            if ((*it).expired()) 
+            {
+                it = observers.erase(it);
+            }
+            else if (auto observer = it->lock())
+            {
+                *observer = true;
+                ++it;
+            }
+        }
     }
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    tsl::hopscotch_map<std::type_index, tsl::hopscotch_map<Entity, std::any>>   m_components;   ///< Components
-    std::unordered_set<Entity>                                                  m_entities;     ///< Entities
+    std::map<std::type_index, std::map<Entity, std::any>>   m_components;   ///< Components
+    std::set<Entity>                                                  m_entities;     ///< Entities
+    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>       m_views;        ///< Views 
+};
+
+////////////////////////////////////////////////////////////
+template <typename ... Components>
+class View
+{
+public:
+    ////////////////////////////////////////////////////////////
+    View(Helper& helper): m_helper(helper), m_update(std::make_shared<bool>(true))
+    {
+    }
+
+    ////////////////////////////////////////////////////////////
+    void update()
+    {
+        m_entities = std::move(m_helper.entities<Components...>());
+        *m_update = false;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Execute a callback for every entities that
+    /// contain specified components
+    ///
+    /// \param callback Callback
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Function>
+    void each(Function&& callback)
+    {
+        if(*m_update)
+        {
+            update();
+        }
+            
+        for(auto&& components: m_entities)
+        {
+            std::apply(callback, components);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Acquire entities that contains specified
+    /// components to iterate on
+    ///
+    /// \return Map of entities with specified components
+    ///
+    ////////////////////////////////////////////////////////////
+    std::vector<std::tuple<Entity, Components&...>>& each()
+    {
+        if(*m_update)
+        {
+            update();
+        }
+
+        return m_entities;
+    }
+
+    ////////////////////////////////////////////////////////////
+    void observe(std::weak_ptr<bool>& observer)
+    {
+        observer = m_update;
+    }
+
+private:
+    Helper& m_helper;
+    std::vector<std::tuple<Entity, Components&...>> m_entities;
+    std::shared_ptr<bool> m_update;
 };
 
 } // namespace CNtity
