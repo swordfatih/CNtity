@@ -1,6 +1,5 @@
-//CNtity
+// CNtity
 #include "CNtity/Helper.hpp"
-#include <iostream>
 
 ////////////////////////////////////////////////////////////
 struct Position
@@ -8,17 +7,10 @@ struct Position
     float x;
     float y;
 
-    void serialize()
+    std::string to_string()
     {
-        std::cout << "serialize Position: " << x << " " << y << std::endl;
+        return "Health: " + std::to_string(x) + "/" + std::to_string(y) + ")";
     }
-};
-
-////////////////////////////////////////////////////////////
-struct Velocity
-{
-    float x;
-    float y;
 };
 
 ////////////////////////////////////////////////////////////
@@ -27,126 +19,77 @@ struct Health
     int max;
     int current;
 
-    void serialize()
+    std::string to_string()
     {
-        std::cout << "serialize Health: " << max << " " << current << std::endl;
+        return "Health: " + std::to_string(max) + "/" + std::to_string(current) + ")";
     }
 };
 
 ////////////////////////////////////////////////////////////
-/// \brief Class to check if a given class has a member
-/// function signed serialize()
-///
-////////////////////////////////////////////////////////////
-template<typename, typename T>
-class check_serializer;
-
-////////////////////////////////////////////////////////////
-/// \brief Specialization of check_serializer
-///
-////////////////////////////////////////////////////////////
-template<typename C, typename Ret, typename... Args>
-class check_serializer<C, Ret(Args...)>
+void move(const CNtity::Entity& e, const std::string& name, Position& position)
 {
-    template<typename T> static constexpr auto check_serialize(T*) -> typename std::is_same<decltype(std::declval<T>().serialize(std::declval<Args>()...)), Ret>::type;
-    template<typename T> static constexpr auto check_deserialize(T*) -> typename std::is_same<decltype(std::declval<T>().deserialize(std::declval<Args>()...)), Ret>::type;
-
-    template<typename> static constexpr std::false_type check_serialize(...);
-    template<typename> static constexpr std::false_type check_deserialize(...);
-
-    typedef decltype(check_serialize<C>(0)) type_serialize;
-    typedef decltype(check_deserialize<C>(0)) type_deserialize;
-
-public:
-    static constexpr bool value_serialize = type_serialize::value;
-    static constexpr bool value_deserialize = type_deserialize::value;
-};
-
-////////////////////////////////////////////////////////////
-template <typename Type>
-constexpr bool has_serializer(Type& object)
-{
-    return check_serializer<Type, void()>::value_serialize;
-}
-
-////////////////////////////////////////////////////////////
-void print(const CNtity::Entity& e, const std::string& name, Position& position)
-{     
-    if(name == "chat")
-    {
-        position.x += 10;
-    }
-
-    std::cout << name << std::endl;  
+    position.x += 10;
 }
 
 ////////////////////////////////////////////////////////////
 int main()
 {
-    //Helper
+    // Helper
     CNtity::Helper helper;
 
-    //Creating entities
-    auto chat = helper.create<std::string, Health, int>("chat", {100, 80}, 10);
+    // Creating entities
+    auto chat = helper.create<std::string, Health>("chat", {100, 80});
     helper.create<std::string>("chien");
     helper.create<std::string, Position>("velociraptor", {25, 70});
 
-    //Adding component, changing values
+    // Adding component, changing values
     auto [position] = helper.add<Position>(chat, {50, 50});
     position.x += 50;
 
-    //Duplicate a component
-    auto chat_copy = helper.duplicate(chat);
-    helper.add<std::string>(chat_copy, "copie de chat");
+    // Duplicate an entity
+    auto clone = helper.duplicate(chat);
+    helper.add<std::string>(clone, "clone de chat");
 
-    //Entities
-    std::cout << helper.entities().size() << std::endl;
-
-    //Visit components of an entity
-    helper.visit<Position, std::string, Health>(chat, [](auto component)
+    // Visit components of an entity
+    helper.visit<Position, Health>(chat, [](auto component)
     {
-        if constexpr(has_serializer(component)) 
-        {
-            component.serialize();
-        }
+        component.to_string();
     });
 
-    //View
-    auto view = helper.view<std::string, Position>();
+    // View
+    // or: auto view = helper.view<std::string, Position>();
+    CNtity::View<std::string, Position> view(helper);
 
-    //System 1
-    view.each(print);
+    // System 1
+    view.each(move); // can also use a lambda
 
-    //System 2
+    // System 2
     for(auto [entity, name, position]: view.each())
     {
         if(name == "chat")
         {
-            position.x += 200; 
-            position.y += 70;
+            position.x += 10;
+            break;
         }
-
-        std::cout << name << ' ' << position.x << ' ' << position.y << std::endl;  
     }
 
+    // Get 1
     if(auto values = helper.get_if<Health, Position>(chat))
     {
         auto [health, position] = *values;
-        health.current += 10;
-        position.x += 5;
-        std::cout << health.current << std::endl;
+        health.current += 5;
     }
 
+    // Get 2
     if(helper.has<Health, Position>(chat))
     {
         auto [health, position] = helper.get<Health, Position>(chat);
         health.current += 5;
-        std::cout << health.current << std::endl; 
     }
 
-    //Removing a component, erasing an entity
-    helper.remove<Position>(chat);
-    helper.erase(chat);
+    helper.remove<Position>(chat); // Removes component from an entity
+    helper.remove<std::string>();  // Removes component from all entities
+    helper.remove(chat);           // Removes an entity
 
     return 0;
 }

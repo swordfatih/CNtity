@@ -1,0 +1,28 @@
+---
+# options: https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+BreakBeforeBraces: Allman
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+ColumnLimit: 0
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: false
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+  MaxEmptyLinesToKeep: 2
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+PointerAlignment: Left
+SpaceBeforeParens: Never
+SpaceBeforeRangeBasedForLoopColon: false
+SpacesInAnglesStyle: Never
+IncludeBlocksStyle: Regroup
+LambdaBodyIndentation: OuterScope
+AllowShortLambdasOnASingleLine: Empty
