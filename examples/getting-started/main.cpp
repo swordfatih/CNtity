@@ -4,8 +4,7 @@
 ////////////////////////////////////////////////////////////
 struct Position
 {
-    float x;
-    float y;
+    float x, y;
 
     std::string to_string()
     {
@@ -16,20 +15,13 @@ struct Position
 ////////////////////////////////////////////////////////////
 struct Health
 {
-    int max;
-    int current;
+    int max, current;
 
     std::string to_string()
     {
         return "Health: " + std::to_string(max) + "/" + std::to_string(current) + ")";
     }
 };
-
-////////////////////////////////////////////////////////////
-void move(const CNtity::Entity& e, const std::string& name, Position& position)
-{
-    position.x += 10;
-}
 
 ////////////////////////////////////////////////////////////
 int main()
@@ -58,10 +50,13 @@ int main()
 
     // View
     // or: auto view = helper.view<std::string, Position>();
-    CNtity::View<std::string, Position> view(helper);
+    CNtity::View<std::string, Position> view{helper};
 
     // System 1
-    view.each(move); // can also use a lambda
+    view.each([](auto entity, auto name, auto& position)
+    {
+        position.x += 10;
+    });
 
     // System 2
     for(auto [entity, name, position]: view.each())

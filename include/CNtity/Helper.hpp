@@ -496,10 +496,17 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Constructor to associate the view to a helper
     ///
+    /// \param helper The associated helper
+    /// \param subscribe If false, the helper wont update this view
+    /// automatically. Defaults to true.
+    ///
     ////////////////////////////////////////////////////////////
-    View(Helper& helper) : m_helper(helper), m_update(std::make_shared<bool>(true))
+    View(Helper& helper, bool subscribe = true) : m_helper(helper), m_update(std::make_shared<bool>(true))
     {
-        m_helper.subscribe(*this);
+        if(subscribe)
+        {
+            m_helper.subscribe(*this);
+        }
     }
 
     ////////////////////////////////////////////////////////////
