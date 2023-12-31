@@ -49,6 +49,16 @@ template <typename... Components>
 class View;
 
 ////////////////////////////////////////////////////////////
+/// \brief Wrapper class to associate a string to a type
+///
+////////////////////////////////////////////////////////////
+template <typename Component>
+class Index : public std::string
+{
+    using std::string::string;
+};
+
+////////////////////////////////////////////////////////////
 /// \brief Class that contains helper functions for an Entity
 /// Component System architecture
 ///
@@ -318,37 +328,15 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Visit a component of an entity by its runtime index
+    /// \brief Visit components associated to a specified
+    /// entity for given possible components
     ///
-    /// Visit a component of an entity by its runtime index for
-    /// given possible types. This function adds a new component
-    /// to the entity if it doesn't already exist.
-    /// May be useful for serialization.
-    ///
-    /// \param entity Entity
-    /// \param index Index of the component
-    /// \param visitor Visitor function
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components, typename Function>
-    void visit(const Entity& entity, std::type_index index, Function visitor)
-    {
-        ([this, &entity, &visitor, &index]
-        {
-            if(typeid(Components).name() == index.name() && has<Components>(entity))
-            {
-                visitor(std::get<0>(get<Components>(entity)));
-            }
-        }(),
-         ...);
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Visit all components associated to a specified
-    /// entity for given possible types
+    /// You may give more or less component types than what the
+    /// entity really has.
     ///
     /// \param entity Entity
     /// \param visitor Visitor function
+    /// \tparam Possible components to visit
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
@@ -358,10 +346,60 @@ public:
         {
             if(auto tuple = get_if<Components>(entity))
             {
-                visitor(std::get<0>(*tuple));
+                visitor(std::get<0>(*tuple), index<Components>());
             }
         }(),
          ...);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Visit a component of an entity by its index
+    ///
+    /// Visit a component of an entity by its index for given
+    /// possible types.
+    /// Adds a new component to the entity if it doesn't have
+    /// a given component. The component has to be default
+    /// constructible.
+    /// This function is useful for (de)serialization.
+    ///
+    /// \param entity Entity
+    /// \param index Index of the component
+    /// \param visitor Visitor function
+    /// \tparam Possible components to visit
+    ///
+    /// \see index
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename... Components, typename Function>
+    void visit(const Entity& entity, const std::string& index, Function visitor)
+    {
+        ([this, &entity, &visitor, &index]
+        {
+            if(m_indexes.count(index) && typeid(Components).name() == m_indexes.at(index).name())
+            {
+                if(!has<Components>(entity))
+                {
+                    add<Components>(entity, {});
+                }
+
+                visitor(std::get<0>(get<Components>(entity)));
+            }
+        }(),
+         ...);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Associate indexes to components for (de)serialization
+    ///
+    /// \param index Indexes to associate, in the same orders as
+    /// components
+    /// \tparam Components to associate
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename... Components>
+    void index(const Index<Components>&... index)
+    {
+        ((m_indexes.emplace(std::make_pair(index, std::type_index(typeid(Components))))), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -394,7 +432,7 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Add view to the views-to-notify lists
+    /// \brief Add view to views-to-notify lists
     ///
     /// Create an observer weak pointer for every
     /// components associated to a view.
@@ -475,18 +513,42 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get the string index associated to a component
+    /// by it's type
+    ///
+    /// \tparam Component to get index for
+    ///
+    /// \return Optional index
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Component>
+    std::optional<std::string> index()
+    {
+        for(auto [index, type]: m_indexes)
+        {
+            if(type == typeid(Component))
+            {
+                return std::make_optional(index);
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
     std::map<std::type_index, std::map<Entity, std::any>>       m_components; ///< Components
     std::set<Entity>                                            m_entities;   ///< Entities
     std::map<std::type_index, std::vector<std::weak_ptr<bool>>> m_views;      ///< Views
+    std::map<std::string, std::type_index>                      m_indexes;    ///< Component indexes
 };
 
 ////////////////////////////////////////////////////////////
 /// \brief Wrapper class to store and iterate over entities
 /// which contain specified components
 ///
-/// \tparam Components for the entities to have
+/// \tparam Components for entities to have
 ///
 ////////////////////////////////////////////////////////////
 template <typename... Components>
@@ -518,7 +580,7 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Retrieve the entities from the helper
+    /// \brief Retrieve entities from the helper
     ///
     ////////////////////////////////////////////////////////////
     void update()
