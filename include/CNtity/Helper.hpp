@@ -408,7 +408,7 @@ public:
 
     ////////////////////////////////////////////////////////////
     /// \brief Create a view associated to the current helper
-
+    ///
     /// Shortcut function to create a view associated to
     /// the current helper instance observing specified
     /// components.
