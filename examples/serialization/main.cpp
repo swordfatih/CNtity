@@ -80,7 +80,7 @@ CNtity::Entity deserialize(CNtity::Helper& helper, const std::vector<std::pair<s
 int main()
 {
     CNtity::Helper helper;
-    helper.index<Position>("position");
+    helper.index<Position, Health>("position", "health");
 
     auto entity = helper.create<Position, Health>({5.2, 10.3}, {80, 100});
 
@@ -94,11 +94,11 @@ int main()
 
     if(auto tuple = helper.get_if<Position, Health>(entity))
     {
+        // print in a generic way
         std::apply([](auto&&... args)
         {
             ((std::cout << args.to_string() << std::endl), ...);
-        },
-                   *tuple);
+        }, *tuple);
     }
 
     return 0;

@@ -43,7 +43,7 @@ int main()
     helper.add<std::string>(clone, "clone de chat");
 
     // Visit components of an entity
-    helper.visit<Position, Health>(chat, [](auto component)
+    helper.visit<Position, Health>(chat, [](auto component, auto index)
     {
         component.to_string();
     });

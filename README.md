@@ -39,34 +39,6 @@ if(auto values = helper.get_if<Health, std::string>(cat))
 }
 ```
 
-### Visit components of an entity and serialization
-
-Sometimes, you need to do an operation on many components of an entity in a generic way, for example for serialization.
-
-You may do this by visiting the entity on selected components in a type-safe manner. The types of components the entity doesn't have will be ignored.
-
-```cpp
-struct Position
-{
-    float x, y;
-
-    void serialize() {};
-};
-
-struct Health
-{
-    float x, y;
-
-    void serialize() {};
-};
-
-helper.visit<Position, Health>(cat, [](auto component)
-{
-    component.serialize();
-    // this is safe, compilation will fail if all the components don't have the "serialize" member
-});
-```
-
 ### Iterate over entities
 
 You will for sure want to retrieve all the entities containing one or more components. To do so, you can create a View which will be automatically, or not, updated by the helper.
@@ -86,9 +58,54 @@ for(auto [entity, position]: view.each())
 }
 ```
 
+### Visit components, (de)serialization
+
+Sometimes, you need to do an operation on many components of an entity in a generic way, for example to serialize it.
+
+You may do this by visiting the entity on selected components in a type-safe manner. The component types that the entity doesn't have will be ignored.
+
+**Index components**
+```cpp
+struct Position
+{
+    float x, y;
+
+    std::string serialize() {};
+    void deserialize(std::string data) {};
+};
+
+struct Health
+{
+    float x, y;
+
+    std::string serialize() {};
+    void deserialize(std::string data) {};
+};
+
+helper.index<Position, Health>("position", "health"); // associate an unique ID to components for (de)serialization
+```
+
+**Serialization**
+```cpp
+helper.visit<Position, Health>(cat, [](auto component, auto index)
+{
+    auto data = component.serialize(); // save data and index to a file
+});
+```
+
+**Deserialization**
+```cpp
+std::string index, data; // load data and index from a file
+
+helper.visit<Position, Health>(cat, index, [&data](auto component)
+{
+    component.deserialize(data);
+});
+```
+
 ### Full example
 
-Checkout the following example code, which can also be found inside the `examples/getting-started` folder, to get an overview of most features.
+Checkout the following example codes, which can also be found inside the `examples` folder, to get an overview of most features.
 
 Ofcourse, you will be able to make more complex programs (e.g, creating classes for your systems).
-CNtity's best point is that it isn't imposing any architecture to your application.
+CNtity's best point is that it isn't forcing some "architecture" on your application.
