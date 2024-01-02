@@ -294,6 +294,24 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get one component associated to an entity
+    ///
+    /// Throws an exception if the entity doesn't have the
+    /// specified components.
+    ///
+    /// \param entity The entity to look components for
+    /// \tparam Component to look for
+    ///
+    /// \return Reference to the component
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Component>
+    Component& one(const Entity& entity)
+    {
+        return std::any_cast<Component&>(m_components[typeid(Component)].at(entity));
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Get components associated to an entity
     ///
     /// Throws an exception if the entity doesn't have the
