@@ -53,7 +53,7 @@ int main()
     CNtity::View<std::string, Position> view{helper};
 
     // System 1
-    view.each([](auto entity, auto name, auto& position)
+    view.each([](const auto& entity, const auto& name, auto& position)
     {
         position.x += 10;
     });

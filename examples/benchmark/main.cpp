@@ -52,7 +52,7 @@ int main()
 
             for(int i = 0; i < iterationCount; ++i)
             {
-                view.each([&](auto ent, auto num)
+                view.each([&](auto& ent, auto& num)
                 {
                     sum += num;
                 });
@@ -67,7 +67,7 @@ int main()
             
             for(int i = 0; i < iterationCount; ++i)
             {
-                view.each([&](auto ent, auto num, auto name)
+                view.each([&](auto& ent, auto& num, auto& name)
                 {
                     sum += num;
                 });
