@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
 // CNtity - Chats Noirs Entity Component System Helper
-// Copyright (c) 2018 - 2023 Fatih (accfldekur@gmail.com)
+// Copyright (c) 2018 - 2025 Fatih (accfldekur@gmail.com)
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -29,14 +29,12 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-// stduuid
-#include "CNtity/stduuid/uuid.h"
+#include "Pool.hpp"
 
-// Standard
-#include <any>
 #include <map>
-#include <set>
 #include <typeindex>
+#include <unordered_map>
+#include <uuid.h>
 
 namespace CNtity
 {
@@ -70,7 +68,7 @@ public:
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    Helper() : m_components(), m_entities()
+    Helper() : m_pools(), m_entities()
     {
     }
 
@@ -92,9 +90,9 @@ public:
     std::vector<std::type_index> components() const
     {
         std::vector<std::type_index> components;
-        components.reserve(m_components.size());
+        components.reserve(m_pools.size());
 
-        for(const auto& [key, _]: m_components)
+        for(const auto& [key, _]: m_pools)
         {
             components.push_back(key);
         }
@@ -103,14 +101,28 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    template <typename Component>
+    SparseSet<Entity, Component>& pool()
+    {
+        auto& pool = m_pools[typeid(Component)];
+
+        if(!pool)
+        {
+            pool = std::make_unique<Pool<Entity, Component>>();
+        }
+
+        return static_cast<Pool<Entity, Component>*>(pool.get())->storage;
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Get all the entities
     ///
-    /// \return Unique identifier of every entities in a set
+    /// \return Unique identifier of every entities in a vector
     ///
     ////////////////////////////////////////////////////////////
-    const std::set<Entity>& entities()
+    const std::vector<Entity>& entities()
     {
-        return m_entities;
+        return m_entities.entities();
     }
 
     ////////////////////////////////////////////////////////////
@@ -118,7 +130,7 @@ public:
     ///
     /// \tparam Components to look for entities in
     ///
-    /// \return Unique identifier of every entities in a set
+    /// \return Unique identifier of every entities in a vector
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -126,7 +138,7 @@ public:
     {
         std::vector<std::tuple<Entity, Components&...>> entities;
 
-        for(auto& [entity, _]: m_components[smallest<Components...>()])
+        for(auto& entity: m_pools[smallest<Components...>()]->entities())
         {
             if(has<Components...>(entity))
             {
@@ -154,7 +166,7 @@ public:
             identifier = uuids::uuid_random_generator{random_generator()}();
         }
 
-        m_entities.emplace(identifier);
+        m_entities.insert(identifier, true);
 
         return identifier;
     }
@@ -209,7 +221,7 @@ public:
     ////////////////////////////////////////////////////////////
     bool match(const Entity& entity)
     {
-        return m_entities.count(entity);
+        return m_entities.has(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -225,8 +237,7 @@ public:
     template <typename... Components>
     std::tuple<Components&...> add(const Entity& entity, const Components&... components)
     {
-        ((m_components[typeid(components)][entity] = components), ...);
-
+        (pool<Components>().insert(entity, components), ...);
         (notify(typeid(Components)), ...);
 
         return get<Components...>(entity);
@@ -242,8 +253,7 @@ public:
     template <typename... Components>
     void remove(const Entity& entity)
     {
-        (m_components[typeid(Components)].erase(entity), ...);
-
+        (pool<Components>().remove(entity), ...);
         (notify(typeid(Components)), ...);
     }
 
@@ -255,13 +265,12 @@ public:
     ////////////////////////////////////////////////////////////
     void remove(const Entity& entity)
     {
-        for(auto& [component, entities]: m_components)
+        for(auto& [id, pool]: m_pools)
         {
-            const_cast<std::map<Entity, std::any>&>(entities).erase(entity);
-            notify(component);
+            pool->remove(entity);
         }
 
-        m_entities.erase(entity);
+        m_entities.remove(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -273,8 +282,7 @@ public:
     template <typename... Components>
     void remove()
     {
-        (m_components.erase(typeid(Components)), ...);
-
+        (m_pools.erase(typeid(Components)), ...);
         (notify(typeid(Components)), ...);
     }
 
@@ -290,7 +298,7 @@ public:
     template <typename... Components>
     bool has(const Entity& entity)
     {
-        return (m_components[typeid(Components)].count(entity) && ...);
+        return (pool<Components>().has(entity) && ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -308,7 +316,7 @@ public:
     template <typename... Components>
     std::tuple<Components&...> get(const Entity& entity)
     {
-        return std::tie(std::any_cast<Components&>(m_components[typeid(Components)].at(entity))...);
+        return std::tie(pool<Components>().get(entity)...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -325,6 +333,24 @@ public:
     std::optional<std::tuple<Components&...>> get_if(const Entity& entity)
     {
         return has<Components...>(entity) ? std::make_optional(get<Components...>(entity)) : std::nullopt;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get one component associated to an entity
+    ///
+    /// Throws an exception if the entity doesn't have the
+    /// specified components.
+    ///
+    /// \param entity The entity to look components for
+    /// \tparam Component to look for
+    ///
+    /// \return Reference to the component
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename Component>
+    Component& one(const Entity& entity)
+    {
+        return pool<Component>().get(entity);
     }
 
     ////////////////////////////////////////////////////////////
@@ -348,8 +374,7 @@ public:
             {
                 visitor(std::get<0>(*tuple), index<Components>());
             }
-        }(),
-         ...);
+        }(), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -384,8 +409,7 @@ public:
 
                 visitor(std::get<0>(get<Components>(entity)));
             }
-        }(),
-         ...);
+        }(), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -417,14 +441,12 @@ public:
             destination = create();
         }
 
-        for(auto& [component, entities]: m_components)
+        for(auto& [id, pool]: m_pools)
         {
-            if(entities.count(source))
+            if(pool->has(source))
             {
-                auto& map = const_cast<std::map<Entity, std::any>&>(entities);
-                map.emplace(std::make_pair(destination, map[source]));
-
-                notify(component);
+                pool->clone(source, destination);
+                notify(id);
             }
         }
 
@@ -472,7 +494,7 @@ private:
     std::type_index smallest()
     {
         std::type_index component(typeid(std::tuple_element_t<0, std::tuple<Components&...>>));
-        ((component = m_components[typeid(Components)].size() < m_components[component].size() ? typeid(Components) : component), ...);
+        ((component = pool<Components>().size() < m_pools[component]->size() ? typeid(Components) : component), ...);
         return component;
     }
 
@@ -538,10 +560,10 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::map<std::type_index, std::map<Entity, std::any>>       m_components; ///< Components
-    std::set<Entity>                                            m_entities;   ///< Entities
-    std::map<std::type_index, std::vector<std::weak_ptr<bool>>> m_views;      ///< Views
-    std::map<std::string, std::type_index>                      m_indexes;    ///< Component indexes
+    std::unordered_map<std::type_index, std::unique_ptr<BasePool<Entity>>> m_pools;    ///< Component pools
+    SparseSet<Entity, bool>                                                m_entities; ///< Entities
+    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>            m_views;    ///< Views
+    std::map<std::string, std::type_index>                                 m_indexes;  ///< Component indexes
 };
 
 ////////////////////////////////////////////////////////////

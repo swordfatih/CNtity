@@ -8,7 +8,7 @@ struct Position
 
     std::string to_string()
     {
-        return "Health: " + std::to_string(x) + "/" + std::to_string(y) + ")";
+        return "Health: " + std::to_string(x) + "/" + std::to_string(y);
     }
 };
 
@@ -19,7 +19,7 @@ struct Health
 
     std::string to_string()
     {
-        return "Health: " + std::to_string(max) + "/" + std::to_string(current) + ")";
+        return "Health: " + std::to_string(max) + "/" + std::to_string(current);
     }
 };
 
@@ -80,6 +80,13 @@ int main()
     {
         auto [health, position] = helper.get<Health, Position>(chat);
         health.current += 5;
+    }
+
+    // One
+    if(helper.has<Health, Position>(chat))
+    {
+        helper.one<Health>(chat).to_string();
+        helper.one<Position>(chat).x += 10;
     }
 
     helper.remove<Position>(chat); // Removes component from an entity
