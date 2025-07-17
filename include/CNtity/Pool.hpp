@@ -23,98 +23,40 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-#ifndef POOL_HPP
-#define POOL_HPP
+#pragma once
 
-////////////////////////////////////////////////////////////
-// Headers
-////////////////////////////////////////////////////////////
-#include "SparseSet.hpp"
+#include "Component.hpp"
 
-#include <any>
-#include <map>
-#include <set>
-#include <typeindex>
+#include <vector>
 
 namespace CNtity
 {
 
 ////////////////////////////////////////////////////////////
-template <typename Entity>
 struct BasePool
 {
-    using RemoveFn = void (*)(BasePool<Entity>*, const Entity&);
-    using HasFn = bool (*)(BasePool<Entity>*, const Entity&);
-    using ClearFn = void (*)(BasePool<Entity>*);
-    using CloneFn = void (*)(BasePool<Entity>*, const Entity&, const Entity&);
-    using SizeFn = size_type (*)(BasePool<Entity>*);
-    using EntitiesFn = std::vector<Entity>& (*)(BasePool<Entity>*);
+    virtual ~BasePool() = default;
 
-    RemoveFn   remove_fn{};
-    ClearFn    clear_fn{};
-    HasFn      has_fn{};
-    CloneFn    clone_fn{};
-    SizeFn     size_fn{};
-    EntitiesFn entities_fn{};
-
-    void                 remove(const Entity& entity) { remove_fn(this, entity); }
-    void                 clear() { clear_fn(this); }
-    bool                 has(const Entity& entity) { return has_fn(this, entity); }
-    void                 clone(const Entity& source, const Entity& destination) { clone_fn(this, source, destination); }
-    size_type            size() { return size_fn(this); }
-    std::vector<Entity>& entities() { return entities_fn(this); }
+    virtual void                 remove(Entity entity) = 0;
+    virtual void                 clear() = 0;
+    virtual bool                 has(Entity entity) = 0;
+    virtual void                 copy(Entity source, Entity destination) = 0;
+    virtual size_type            size() const = 0;
+    virtual std::vector<Entity>& entities() = 0;
 };
 
 ////////////////////////////////////////////////////////////
-template <typename Entity, typename Component>
-struct Pool final : BasePool<Entity>
+template <typename Component>
+struct Pool final : BasePool
 {
-    SparseSet<Entity, Component> storage;
+    ComponentSet<Component> storage;
 
-    auto& get_storage(BasePool<Entity>* self)
-    {
-        return static_cast<Pool*>(self)->storage;
-    }
-
-    Pool()
-    {
-        this->remove_fn = [](BasePool<Entity>* self, const Entity& entity)
-        {
-            static_cast<Pool*>(self)->storage.remove(entity);
-        };
-
-        this->clear_fn = [](BasePool<Entity>* self)
-        {
-            static_cast<Pool*>(self)->storage = {};
-        };
-
-        this->has_fn = [](BasePool<Entity>* self, const Entity& entity)
-        {
-            return static_cast<Pool*>(self)->storage.has(entity);
-        };
-
-        this->clone_fn = [](BasePool<Entity>* self, const Entity& source, const Entity& destination)
-        {
-            auto& storage = static_cast<Pool*>(self)->storage;
-
-            if(storage.has(source))
-            {
-                storage.insert(destination, storage.get(source));
-            }
-        };
-
-        this->size_fn = [](BasePool<Entity>* self)
-        {
-            return static_cast<Pool*>(self)->storage.size();
-        };
-
-        this->entities_fn = [](BasePool<Entity>* self) -> std::vector<Entity>&
-        {
-            return static_cast<Pool*>(self)->storage.entities();
-        };
-    }
+    void                 remove(Entity entity) override { storage.remove(entity); }
+    void                 clear() override { storage = {}; }
+    bool                 has(Entity entity) override { return storage.has(entity); }
+    void                 copy(Entity source, Entity destination) override { storage.copy(source, destination); }
+    size_type            size() const override { return storage.size(); }
+    std::vector<Entity>& entities() override { return storage.entities(); }
 };
 
 } // namespace CNtity
-
-#endif // POOL_HPP

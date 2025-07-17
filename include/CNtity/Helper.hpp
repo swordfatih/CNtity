@@ -23,24 +23,23 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HELPER_HPP
-#define HELPER_HPP
+#pragma once
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include "Entity.hpp"
 #include "Pool.hpp"
 
 #include <map>
+#include <memory>
+#include <optional>
+#include <string>
 #include <typeindex>
 #include <unordered_map>
-#include <uuid.h>
 
 namespace CNtity
 {
-
-////////////////////////////////////////////////////////////
-using Entity = uuids::uuid; ///< Entities are only unique identifiers
 
 ////////////////////////////////////////////////////////////
 template <typename... Components>
@@ -51,9 +50,9 @@ class View;
 ///
 ////////////////////////////////////////////////////////////
 template <typename Component>
-class Index : public std::string
+class Index : public std::string_view
 {
-    using std::string::string;
+    using std::string_view::string_view;
 };
 
 ////////////////////////////////////////////////////////////
@@ -102,16 +101,16 @@ public:
 
     ////////////////////////////////////////////////////////////
     template <typename Component>
-    SparseSet<Entity, Component>& pool()
+    ComponentSet<Component>& pool()
     {
         auto& pool = m_pools[typeid(Component)];
 
         if(!pool)
         {
-            pool = std::make_unique<Pool<Entity, Component>>();
+            pool = std::make_unique<ComponentSet<Component>>();
         }
 
-        return static_cast<Pool<Entity, Component>*>(pool.get())->storage;
+        return *static_cast<ComponentSet<Component>*>(pool.get());
     }
 
     ////////////////////////////////////////////////////////////
@@ -138,37 +137,18 @@ public:
     {
         std::vector<std::tuple<Entity, Components&...>> entities;
 
-        for(auto& entity: m_pools[smallest<Components...>()]->entities())
+        auto& smallest = smallest_pool<Components...>();
+        entities.reserve(smallest.size());
+
+        for(auto& entity: smallest.entities())
         {
             if(has<Components...>(entity))
             {
-                entities.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
+                entities.emplace_back(entity, pool<Components>().get(entity)...);
             }
         }
 
         return entities;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Create entity using an optional given identifier
-    ///
-    /// \param identifier Use a defined identifier for the new
-    /// entity. A new unique identifier is generated if none is
-    /// given or if it is already used.
-    ///
-    /// \return Created entity's identifier
-    ///
-    ////////////////////////////////////////////////////////////
-    Entity create(Entity identifier = {})
-    {
-        if(identifier.is_nil() || match(identifier))
-        {
-            identifier = uuids::uuid_random_generator{random_generator()}();
-        }
-
-        m_entities.insert(identifier, true);
-
-        return identifier;
     }
 
     ////////////////////////////////////////////////////////////
@@ -182,31 +162,7 @@ public:
     template <typename... Components>
     Entity create(const Components&... components)
     {
-        Entity entity = create();
-
-        add(entity, components...);
-
-        return entity;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Create an entity using an identifier and add
-    /// components to it
-    ///
-    /// \param identifier Identifier of the entity, a random one
-    /// is created if already exists
-    /// \param components Instances of components
-    /// \tparam Components to add
-    ///
-    /// \return Created entity's identifier
-    ///
-    /// \see add
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    Entity create(Entity identifier, const Components&... components)
-    {
-        Entity entity = create(identifier);
+        Entity entity = m_entities.create();
 
         add(entity, components...);
 
@@ -219,7 +175,7 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    bool match(const Entity& entity)
+    bool match(Entity entity)
     {
         return m_entities.has(entity);
     }
@@ -235,10 +191,10 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::tuple<Components&...> add(const Entity& entity, const Components&... components)
+    std::tuple<Components&...> add(Entity entity, const Components&... components)
     {
         (pool<Components>().insert(entity, components), ...);
-        (notify(typeid(Components)), ...);
+        (notify(typeid(Components), entity), ...);
 
         return get<Components...>(entity);
     }
@@ -251,10 +207,10 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    void remove(const Entity& entity)
+    void remove(Entity entity)
     {
         (pool<Components>().remove(entity), ...);
-        (notify(typeid(Components)), ...);
+        (notify(typeid(Components), entity), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -263,11 +219,12 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    void remove(const Entity& entity)
+    void remove(Entity entity)
     {
         for(auto& [id, pool]: m_pools)
         {
             pool->remove(entity);
+            notify(id);
         }
 
         m_entities.remove(entity);
@@ -296,7 +253,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    bool has(const Entity& entity)
+    bool has(Entity entity)
     {
         return (pool<Components>().has(entity) && ...);
     }
@@ -314,7 +271,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::tuple<Components&...> get(const Entity& entity)
+    std::tuple<Components&...> get(Entity entity)
     {
         return std::tie(pool<Components>().get(entity)...);
     }
@@ -330,7 +287,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::optional<std::tuple<Components&...>> get_if(const Entity& entity)
+    std::optional<std::tuple<Components&...>> get_if(Entity entity)
     {
         return has<Components...>(entity) ? std::make_optional(get<Components...>(entity)) : std::nullopt;
     }
@@ -348,7 +305,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
-    Component& one(const Entity& entity)
+    Component& one(Entity entity)
     {
         return pool<Component>().get(entity);
     }
@@ -366,13 +323,20 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
-    void visit(const Entity& entity, Function visitor)
+    void visit(Entity entity, Function visitor)
     {
         ([this, &entity, &visitor]
         {
             if(auto tuple = get_if<Components>(entity))
             {
-                visitor(std::get<0>(*tuple), index<Components>());
+                if constexpr(std::is_invocable_v<Function, Components&>)
+                {
+                    visitor(std::get<0>(*tuple));
+                }
+                else
+                {
+                    visitor(std::get<0>(*tuple), index<Components>());
+                }
             }
         }(), ...);
     }
@@ -396,7 +360,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
-    void visit(const Entity& entity, const std::string& index, Function visitor)
+    void visit(Entity entity, const std::string& index, Function visitor)
     {
         ([this, &entity, &visitor, &index]
         {
@@ -434,18 +398,15 @@ public:
     /// if not specified.
     ///
     ////////////////////////////////////////////////////////////
-    Entity duplicate(const Entity& source, Entity destination = {})
+    Entity duplicate(Entity source)
     {
-        if(destination.is_nil() || !match(destination))
-        {
-            destination = create();
-        }
+        auto destination = create();
 
         for(auto& [id, pool]: m_pools)
         {
             if(pool->has(source))
             {
-                pool->clone(source, destination);
+                pool->copy(source, destination);
                 notify(id);
             }
         }
@@ -491,23 +452,11 @@ private:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::type_index smallest()
+    IComponentSet& smallest_pool()
     {
-        std::type_index component(typeid(std::tuple_element_t<0, std::tuple<Components&...>>));
-        ((component = pool<Components>().size() < m_pools[component]->size() ? typeid(Components) : component), ...);
-        return component;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Random generator using the standard library
-    ///
-    /// Used for the generation of UUID.
-    ///
-    ////////////////////////////////////////////////////////////
-    static std::mt19937& random_generator()
-    {
-        static std::mt19937 random_generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-        return random_generator;
+        IComponentSet* smallest = &pool<std::tuple_element_t<0, std::tuple<Components...>>>();
+        ((smallest = pool<Components>().size() < smallest->size() ? &pool<Components>() : smallest), ...);
+        return *smallest;
     }
 
     ////////////////////////////////////////////////////////////
@@ -516,8 +465,7 @@ private:
     /// \param component Type index of the component.
     ///
     ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    void notify(const std::type_index& component)
+    void notify(const std::type_index& component, Entity entity = {})
     {
         auto& observers = m_views[component];
         for(auto it = observers.begin(); it != observers.end();)
@@ -560,10 +508,10 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unordered_map<std::type_index, std::unique_ptr<BasePool<Entity>>> m_pools;    ///< Component pools
-    SparseSet<Entity, bool>                                                m_entities; ///< Entities
-    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>            m_views;    ///< Views
-    std::map<std::string, std::type_index>                                 m_indexes;  ///< Component indexes
+    std::unordered_map<std::type_index, std::unique_ptr<IComponentSet>> m_pools;    ///< Component pools
+    Entities                                                            m_entities; ///< Entities
+    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>         m_views;    ///< Views
+    std::map<std::string, std::type_index>                              m_indexes;  ///< Component indexes
 };
 
 ////////////////////////////////////////////////////////////
@@ -670,5 +618,3 @@ private:
 };
 
 } // namespace CNtity
-
-#endif // HELPER_HPP
