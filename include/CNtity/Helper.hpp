@@ -23,24 +23,20 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HELPER_HPP
-#define HELPER_HPP
+#pragma once
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include "Pool.hpp"
+#include "SparseSet.hpp"
 
-#include <map>
-#include <typeindex>
-#include <unordered_map>
-#include <uuid.h>
+// #include <algorithm>
+#include <iostream>
+#include <optional>
+#include <string>
 
 namespace CNtity
 {
-
-////////////////////////////////////////////////////////////
-using Entity = uuids::uuid; ///< Entities are only unique identifiers
 
 ////////////////////////////////////////////////////////////
 template <typename... Components>
@@ -61,6 +57,7 @@ class Index : public std::string
 /// Component System architecture
 ///
 ////////////////////////////////////////////////////////////
+template <typename... Types>
 class Helper
 {
 public:
@@ -68,7 +65,7 @@ public:
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    Helper() : m_pools(), m_entities()
+    Helper() : m_components{}, m_entities{}
     {
     }
 
@@ -80,50 +77,27 @@ public:
     {
     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Get registered components
-    ///
-    /// \return type_index of every registered components in an
-    /// array
-    ///
-    ////////////////////////////////////////////////////////////
-    std::vector<std::type_index> components() const
-    {
-        std::vector<std::type_index> components;
-        components.reserve(m_pools.size());
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Get registered components
+    // ///
+    // /// \return type_index of every registered components in an
+    // /// array
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // std::vector<std::type_index> components() const
+    // {
+    //     std::vector<std::type_index> components;
+    //     components.reserve(std::tuple_size<m_components>);
 
-        for(const auto& [key, _]: m_pools)
-        {
-            components.push_back(key);
-        }
+    //     std::apply(m_components, strs);
+    //     for(const auto& [key, _]: m_components)
+    //     {
 
-        return components;
-    }
+    //         components.push_back(key);
+    //     }
 
-    ////////////////////////////////////////////////////////////
-    template <typename Component>
-    SparseSet<Entity, Component>& pool()
-    {
-        auto& pool = m_pools[typeid(Component)];
-
-        if(!pool)
-        {
-            pool = std::make_unique<Pool<Entity, Component>>();
-        }
-
-        return static_cast<Pool<Entity, Component>*>(pool.get())->storage;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get all the entities
-    ///
-    /// \return Unique identifier of every entities in a vector
-    ///
-    ////////////////////////////////////////////////////////////
-    const std::vector<Entity>& entities()
-    {
-        return m_entities.entities();
-    }
+    //     return components;
+    // }
 
     ////////////////////////////////////////////////////////////
     /// \brief Get all the entities associated to given components
@@ -136,39 +110,20 @@ public:
     template <typename... Components>
     std::vector<std::tuple<Entity, Components&...>> entities()
     {
-        std::vector<std::tuple<Entity, Components&...>> entities;
+        auto& min_pool = std::get<SparseSet<std::tuple_element_t<0, std::tuple<Components...>>>>(m_components).entities();
 
-        for(auto& entity: m_pools[smallest<Components...>()]->entities())
+        std::vector<std::tuple<Entity, Components&...>> result;
+        result.reserve(min_pool.size());
+
+        for(auto& entity: min_pool)
         {
             if(has<Components...>(entity))
             {
-                entities.push_back(std::tuple_cat(std::make_tuple(entity), get<Components...>(entity)));
+                result.emplace_back(entity, pool<Components>().get(entity)...);
             }
         }
 
-        return entities;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Create entity using an optional given identifier
-    ///
-    /// \param identifier Use a defined identifier for the new
-    /// entity. A new unique identifier is generated if none is
-    /// given or if it is already used.
-    ///
-    /// \return Created entity's identifier
-    ///
-    ////////////////////////////////////////////////////////////
-    Entity create(Entity identifier = {})
-    {
-        if(identifier.is_nil() || match(identifier))
-        {
-            identifier = uuids::uuid_random_generator{random_generator()}();
-        }
-
-        m_entities.insert(identifier, true);
-
-        return identifier;
+        return result;
     }
 
     ////////////////////////////////////////////////////////////
@@ -182,31 +137,7 @@ public:
     template <typename... Components>
     Entity create(const Components&... components)
     {
-        Entity entity = create();
-
-        add(entity, components...);
-
-        return entity;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Create an entity using an identifier and add
-    /// components to it
-    ///
-    /// \param identifier Identifier of the entity, a random one
-    /// is created if already exists
-    /// \param components Instances of components
-    /// \tparam Components to add
-    ///
-    /// \return Created entity's identifier
-    ///
-    /// \see add
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    Entity create(Entity identifier, const Components&... components)
-    {
-        Entity entity = create(identifier);
+        auto entity = m_entities.create();
 
         add(entity, components...);
 
@@ -219,7 +150,7 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    bool match(const Entity& entity)
+    bool match(Entity entity) const
     {
         return m_entities.has(entity);
     }
@@ -235,10 +166,10 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::tuple<Components&...> add(const Entity& entity, const Components&... components)
+    std::tuple<Components&...> add(Entity entity, const Components&... components)
     {
         (pool<Components>().insert(entity, components), ...);
-        (notify(typeid(Components)), ...);
+        // (notify(typeid(Components)), ...);
 
         return get<Components...>(entity);
     }
@@ -251,10 +182,10 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    void remove(const Entity& entity)
+    void remove(Entity entity)
     {
         (pool<Components>().remove(entity), ...);
-        (notify(typeid(Components)), ...);
+        // (notify(typeid(Components)), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -263,12 +194,12 @@ public:
     /// \param entity Entity
     ///
     ////////////////////////////////////////////////////////////
-    void remove(const Entity& entity)
+    void remove(Entity entity)
     {
-        for(auto& [id, pool]: m_pools)
+        std::apply([&entity](auto&&... pools)
         {
-            pool->remove(entity);
-        }
+            ((pools.has(entity) ? pools.remove(entity) : void()), ...);
+        }, m_components);
 
         m_entities.remove(entity);
     }
@@ -282,8 +213,8 @@ public:
     template <typename... Components>
     void remove()
     {
-        (m_pools.erase(typeid(Components)), ...);
-        (notify(typeid(Components)), ...);
+        (pool<Components>().clear(), ...);
+        // (notify(typeid(Components)), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -296,7 +227,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    bool has(const Entity& entity)
+    bool has(Entity entity) const
     {
         return (pool<Components>().has(entity) && ...);
     }
@@ -314,7 +245,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::tuple<Components&...> get(const Entity& entity)
+    std::tuple<Components&...> get(Entity entity)
     {
         return std::tie(pool<Components>().get(entity)...);
     }
@@ -330,7 +261,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    std::optional<std::tuple<Components&...>> get_if(const Entity& entity)
+    std::optional<std::tuple<Components&...>> get_if(Entity entity)
     {
         return has<Components...>(entity) ? std::make_optional(get<Components...>(entity)) : std::nullopt;
     }
@@ -348,7 +279,7 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
-    Component& one(const Entity& entity)
+    Component& one(Entity entity)
     {
         return pool<Component>().get(entity);
     }
@@ -366,65 +297,66 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
-    void visit(const Entity& entity, Function visitor)
+    void visit(Entity entity, Function visitor)
     {
-        ([this, &entity, &visitor]
+        (([&]
         {
             if(auto tuple = get_if<Components>(entity))
             {
-                visitor(std::get<0>(*tuple), index<Components>());
+                visitor(std::get<0>(*tuple));
             }
-        }(), ...);
+        }()),
+         ...);
     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Visit a component of an entity by its index
-    ///
-    /// Visit a component of an entity by its index for given
-    /// possible types.
-    /// Adds a new component to the entity if it doesn't have
-    /// a given component. The component has to be default
-    /// constructible.
-    /// This function is useful for (de)serialization.
-    ///
-    /// \param entity Entity
-    /// \param index Index of the component
-    /// \param visitor Visitor function
-    /// \tparam Possible components to visit
-    ///
-    /// \see index
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components, typename Function>
-    void visit(const Entity& entity, const std::string& index, Function visitor)
-    {
-        ([this, &entity, &visitor, &index]
-        {
-            if(m_indexes.count(index) && typeid(Components).name() == m_indexes.at(index).name())
-            {
-                if(!has<Components>(entity))
-                {
-                    add<Components>(entity, {});
-                }
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Visit a component of an entity by its index
+    // ///
+    // /// Visit a component of an entity by its index for given
+    // /// possible types.
+    // /// Adds a new component to the entity if it doesn't have
+    // /// a given component. The component has to be default
+    // /// constructible.
+    // /// This function is useful for (de)serialization.
+    // ///
+    // /// \param entity Entity
+    // /// \param index Index of the component
+    // /// \param visitor Visitor function
+    // /// \tparam Possible components to visit
+    // ///
+    // /// \see index
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename... Components, typename Function>
+    // void visit(Entity entity, const std::string& index, Function visitor)
+    // {
+    //     ([this, &entity, &visitor, &index]
+    //     {
+    //         if(m_indexes.count(index) && typeid(Components).name() == m_indexes.at(index).name())
+    //         {
+    //             if(!has<Components>(entity))
+    //             {
+    //                 add<Components>(entity, {});
+    //             }
 
-                visitor(std::get<0>(get<Components>(entity)));
-            }
-        }(), ...);
-    }
+    //             visitor(std::get<0>(get<Components>(entity)));
+    //         }
+    //     }(), ...);
+    // }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Associate indexes to components for (de)serialization
-    ///
-    /// \param index Indexes to associate, in the same orders as
-    /// components
-    /// \tparam Components to associate
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    void index(const Index<Components>&... index)
-    {
-        ((m_indexes.emplace(std::make_pair(index, std::type_index(typeid(Components))))), ...);
-    }
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Associate indexes to components for (de)serialization
+    // ///
+    // /// \param index Indexes to associate, in the same orders as
+    // /// components
+    // /// \tparam Components to associate
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename... Components>
+    // void index(const Index<Components>&... index)
+    // {
+    //     ((m_indexes.emplace(std::make_pair(index, std::type_index(typeid(Components))))), ...);
+    // }
 
     ////////////////////////////////////////////////////////////
     /// \brief Copy components of an entity to another
@@ -434,241 +366,242 @@ public:
     /// if not specified.
     ///
     ////////////////////////////////////////////////////////////
-    Entity duplicate(const Entity& source, Entity destination = {})
+    Entity duplicate(Entity source)
     {
-        if(destination.is_nil() || !match(destination))
-        {
-            destination = create();
-        }
+        auto destination = create();
 
-        for(auto& [id, pool]: m_pools)
+        std::apply([&source, &destination](auto&&... pools)
         {
-            if(pool->has(source))
+            (([&]
             {
-                pool->clone(source, destination);
-                notify(id);
-            }
-        }
+                if(pools.has(source))
+                {
+                    pools.insert(destination, pools.get(source));
+                    // notify(id);
+                }
+            }()),
+             ...);
+        }, m_components);
 
         return destination;
     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Add view to views-to-notify lists
-    ///
-    /// Create an observer weak pointer for every
-    /// components associated to a view.
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    void subscribe(View<Components...>& view)
-    {
-        (view.observe(m_views[typeid(Components)].emplace_back()), ...);
-    }
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Add view to views-to-notify lists
+    // ///
+    // /// Create an observer weak pointer for every
+    // /// components associated to a view.
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename... Components>
+    // void subscribe(View<Entity, Components...>& view)
+    // {
+    //     (view.observe(m_views[typeid(Components)].emplace_back()), ...);
+    // }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Create a view associated to the current helper
-    ///
-    /// Shortcut function to create a view associated to
-    /// the current helper instance observing specified
-    /// components.
-    ///
-    /// \code
-    /// auto view = helper.view<std::string>();
-    /// \endcode
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    View<Components...> view()
-    {
-        return View<Components...>(*this);
-    }
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Create a view associated to the current helper
+    // ///
+    // /// Shortcut function to create a view associated to
+    // /// the current helper instance observing specified
+    // /// components.
+    // ///
+    // /// \code
+    // /// auto view = helper.view<std::string>();
+    // /// \endcode
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename... Components>
+    // View<Entity, Components...> view()
+    // {
+    //     return View<Entity, Components...>(*this);
+    // }
 
 private:
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the component containing the least amount of
-    /// entities
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    std::type_index smallest()
-    {
-        std::type_index component(typeid(std::tuple_element_t<0, std::tuple<Components&...>>));
-        ((component = pool<Components>().size() < m_pools[component]->size() ? typeid(Components) : component), ...);
-        return component;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Random generator using the standard library
-    ///
-    /// Used for the generation of UUID.
-    ///
-    ////////////////////////////////////////////////////////////
-    static std::mt19937& random_generator()
-    {
-        static std::mt19937 random_generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-        return random_generator;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Notify all views observing given components
-    ///
-    /// \param component Type index of the component.
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    void notify(const std::type_index& component)
-    {
-        auto& observers = m_views[component];
-        for(auto it = observers.begin(); it != observers.end();)
-        {
-            if((*it).expired())
-            {
-                it = observers.erase(it);
-            }
-            else if(auto observer = it->lock())
-            {
-                *observer = true;
-                ++it;
-            }
-        }
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the string index associated to a component
-    /// by it's type
-    ///
-    /// \tparam Component to get index for
-    ///
-    /// \return Optional index
-    ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
-    std::optional<std::string> index()
+    SparseSet<Component>& pool()
     {
-        for(auto [index, type]: m_indexes)
-        {
-            if(type == typeid(Component))
-            {
-                return std::make_optional(index);
-            }
-        }
-
-        return std::nullopt;
+        return std::get<SparseSet<Component>>(m_components);
     }
+
+    ////////////////////////////////////////////////////////////
+    template <typename Component>
+    const SparseSet<Component>& pool() const
+    {
+        return std::get<SparseSet<Component>>(m_components);
+    }
+
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Random generator using the standard library
+    // ///
+    // /// Used for the generation of UUID.
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // static std::mt19937& random_generator()
+    // {
+    //     static std::mt19937 random_generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    //     return random_generator;
+    // }
+
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Notify all views observing given components
+    // ///
+    // /// \param component Type index of the component.
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename Component>
+    // void notify()
+    // {
+    //     auto& observers = m_views[component];
+    //     for(auto it = observers.begin(); it != observers.end();)
+    //     {
+    //         if((*it).expired())
+    //         {
+    //             it = observers.erase(it);
+    //         }
+    //         else if(auto observer = it->lock())
+    //         {
+    //             *observer = true;
+    //             ++it;
+    //         }
+    //     }
+    // }
+
+    // ////////////////////////////////////////////////////////////
+    // /// \brief Get the string index associated to a component
+    // /// by it's type
+    // ///
+    // /// \tparam Component to get index for
+    // ///
+    // /// \return Optional index
+    // ///
+    // ////////////////////////////////////////////////////////////
+    // template <typename Component>
+    // std::optional<std::string> index()
+    // {
+    //     for(auto [index, type]: m_indexes)
+    //     {
+    //         if(type == typeid(Component))
+    //         {
+    //             return std::make_optional(index);
+    //         }
+    //     }
+
+    //     return std::nullopt;
+    // }
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unordered_map<std::type_index, std::unique_ptr<BasePool<Entity>>> m_pools;    ///< Component pools
-    SparseSet<Entity, bool>                                                m_entities; ///< Entities
-    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>            m_views;    ///< Views
-    std::map<std::string, std::type_index>                                 m_indexes;  ///< Component indexes
+    std::tuple<SparseSet<Types>...> m_components; ///< Component pools
+    Entities                        m_entities;   ///< Entities
+    // SparseSet<Entity, bool>                 m_entities; ///< Entities
+    // std::map<std::type_index, std::vector<std::weak_ptr<bool>>> m_views;    ///< Views
+    // std::map<std::string, std::type_index>                      m_indexes;  ///< Component indexes
 };
 
-////////////////////////////////////////////////////////////
-/// \brief Wrapper class to store and iterate over entities
-/// which contain specified components
-///
-/// \tparam Components for entities to have
-///
-////////////////////////////////////////////////////////////
-template <typename... Components>
-class View
-{
-public:
-    ////////////////////////////////////////////////////////////
-    /// \brief Constructor to associate the view to a helper
-    ///
-    /// \param helper The associated helper
-    /// \param subscribe If false, the helper wont update this view
-    /// automatically. Defaults to true.
-    ///
-    ////////////////////////////////////////////////////////////
-    View(Helper& helper, bool subscribe = true) : m_helper(helper), m_update(std::make_shared<bool>(true))
-    {
-        if(subscribe)
-        {
-            m_helper.subscribe(*this);
-        }
-    }
+// ////////////////////////////////////////////////////////////
+// /// \brief Wrapper class to store and iterate over entities
+// /// which contain specified components
+// ///
+// /// \tparam Components for entities to have
+// ///
+// ////////////////////////////////////////////////////////////
+// template <typename Entity, typename... Components>
+// class View
+// {
+// public:
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Constructor to associate the view to a helper
+//     ///
+//     /// \param helper The associated helper
+//     /// \param subscribe If false, the helper wont update this view
+//     /// automatically. Defaults to true.
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     View(Helper<Entity>& helper, bool subscribe = true) : m_helper(helper), m_update(std::make_shared<bool>(true))
+//     {
+//         if(subscribe)
+//         {
+//             m_helper.subscribe(*this);
+//         }
+//     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Default destructor
-    ///
-    ////////////////////////////////////////////////////////////
-    ~View()
-    {
-    }
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Default destructor
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     ~View()
+//     {
+//     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Retrieve entities from the helper
-    ///
-    ////////////////////////////////////////////////////////////
-    void update()
-    {
-        m_entities = std::move(m_helper.entities<Components...>());
-        *m_update = false;
-    }
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Retrieve entities from the helper
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     void update()
+//     {
+//         m_entities = std::move(m_helper.entities<Components...>());
+//         *m_update = false;
+//     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Execute a callback for every entities that
-    /// contain specified components
-    ///
-    /// \param callback Function to call for each entities
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename Function>
-    void each(Function&& callback)
-    {
-        if(*m_update)
-        {
-            update();
-        }
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Execute a callback for every entities that
+//     /// contain specified components
+//     ///
+//     /// \param callback Function to call for each entities
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     template <typename Function>
+//     void each(Function&& callback)
+//     {
+//         if(*m_update)
+//         {
+//             update();
+//         }
 
-        for(auto&& components: m_entities)
-        {
-            std::apply(callback, components);
-        }
-    }
+//         for(auto&& components: m_entities)
+//         {
+//             std::apply(callback, components);
+//         }
+//     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Get entities that contains specified components
-    ///
-    /// \return Array of tuples containing the entity's identifier
-    /// and specified components
-    ///
-    ////////////////////////////////////////////////////////////
-    std::vector<std::tuple<Entity, Components&...>>& each()
-    {
-        if(*m_update)
-        {
-            update();
-        }
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Get entities that contains specified components
+//     ///
+//     /// \return Array of tuples containing the entity's identifier
+//     /// and specified components
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     std::vector<std::tuple<Entity, Components&...>>& each()
+//     {
+//         if(*m_update)
+//         {
+//             update();
+//         }
 
-        return m_entities;
-    }
+//         return m_entities;
+//     }
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Update a weak pointer with the update boolean
-    ///
-    /// \param observer Weak pointer to update
-    ///
-    ////////////////////////////////////////////////////////////
-    void observe(std::weak_ptr<bool>& observer)
-    {
-        observer = m_update;
-    }
+//     ////////////////////////////////////////////////////////////
+//     /// \brief Update a weak pointer with the update boolean
+//     ///
+//     /// \param observer Weak pointer to update
+//     ///
+//     ////////////////////////////////////////////////////////////
+//     void observe(std::weak_ptr<bool>& observer)
+//     {
+//         observer = m_update;
+//     }
 
-private:
-    ////////////////////////////////////////////////////////////
-    // Member data
-    ////////////////////////////////////////////////////////////
-    Helper&                                         m_helper;
-    std::vector<std::tuple<Entity, Components&...>> m_entities;
-    std::shared_ptr<bool>                           m_update;
-};
+// private:
+//     ////////////////////////////////////////////////////////////
+//     // Member data
+//     ////////////////////////////////////////////////////////////
+//     Helper<Entity>&                                 m_helper;
+//     std::vector<std::tuple<Entity, Components&...>> m_entities;
+//     std::shared_ptr<bool>                           m_update;
+// };
 
 } // namespace CNtity
-
-#endif // HELPER_HPP

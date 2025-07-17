@@ -1,6 +1,8 @@
 // CNtity
 #include "CNtity/Helper.hpp"
 
+#include <iostream>
+
 ////////////////////////////////////////////////////////////
 struct Position
 {
@@ -27,39 +29,33 @@ struct Health
 int main()
 {
     // Helper
-    CNtity::Helper helper;
+    CNtity::Helper<std::string, Health, Position> helper;
 
     // Creating entities
     auto chat = helper.create<std::string, Health>("chat", {100, 80});
-    helper.create<std::string>("chien");
-    helper.create<std::string, Position>("velociraptor", {25, 70});
+    std::cout << "chat: " << chat << std::endl;
 
-    // Adding component, changing values
+    auto chien = helper.create<std::string>("chien");
+    std::cout << "chien: " << chien << std::endl;
+
+    auto velociraptor = helper.create<std::string, Position>("velociraptor", {25, 70});
+    std::cout << "velociraptor: " << velociraptor << std::endl;
+
+    // // Adding component, changing values
     auto [position] = helper.add<Position>(chat, {50, 50});
     position.x += 50;
 
-    // Duplicate an entity
+    // // Duplicate an entity
     auto clone = helper.duplicate(chat);
     helper.add<std::string>(clone, "clone de chat");
 
-    // Visit components of an entity
-    helper.visit<Position, Health>(chat, [](auto component, auto index)
-    {
-        component.to_string();
+    std::cout << "clone: " << clone << std::endl;
+
+    helper.visit<std::string, Position>(clone, [](auto& component) {
+        std::cout << typeid(decltype(component)).name() << std::endl;
     });
 
-    // View
-    // or: auto view = helper.view<std::string, Position>();
-    CNtity::View<std::string, Position> view{helper};
-
-    // System 1
-    view.each([](const auto& entity, const auto& name, auto& position)
-    {
-        position.x += 10;
-    });
-
-    // System 2
-    for(auto [entity, name, position]: view.each())
+    for(auto [entity, name, position]: helper.entities<std::string, Position>())
     {
         if(name == "chat")
         {
@@ -67,6 +63,32 @@ int main()
             break;
         }
     }
+
+    // // Visit components of an entity
+    // helper.visit<Position, Health>(chat, [](auto component, auto index)
+    // {
+    //     component.to_string();
+    // });
+
+    // // View
+    // // or: auto view = helper.view<std::string, Position>();
+    // CNtity::View<std::string, Position> view{helper};
+
+    // // System 1
+    // view.each([](const auto& entity, const auto& name, auto& position)
+    // {
+    //     position.x += 10;
+    // });
+
+    // // System 2
+    // for(auto [entity, name, position]: view.each())
+    // {
+    //     if(name == "chat")
+    //     {
+    //         position.x += 10;
+    //         break;
+    //     }
+    // }
 
     // Get 1
     if(auto values = helper.get_if<Health, Position>(chat))
@@ -88,6 +110,8 @@ int main()
         helper.one<Health>(chat).to_string();
         helper.one<Position>(chat).x += 10;
     }
+
+    std::cout << "now removing" << std::endl;
 
     helper.remove<Position>(chat); // Removes component from an entity
     helper.remove<std::string>();  // Removes component from all entities

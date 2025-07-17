@@ -23,13 +23,13 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-#ifndef SPARSESET_HPP
-#define SPARSESET_HPP
+#pragma once
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-// Standard
+#include "Entity.hpp"
+
 #include <cassert>
 #include <unordered_map>
 #include <utility>
@@ -37,83 +37,102 @@
 
 namespace CNtity
 {
-    
+
 ////////////////////////////////////////////////////////////
 using size_type = std::size_t;
 
 ////////////////////////////////////////////////////////////
-template <typename Entity, typename Component>
+template <typename Component>
 class SparseSet
 {
 public:
     ////////////////////////////////////////////////////////////
-    void insert(const Entity& entity, const Component& component)
+    bool insert(Entity entity, const Component& component)
     {
-        if(auto it = m_sparse.find(entity); it != m_sparse.end())
+        const size_t index = Entities::index(entity);
+
+        if(has(entity))
         {
-            m_components[it->second] = component;
+            m_values[m_sparse[index]] = component;
+            return false;
         }
-        else
+
+        if(index >= m_sparse.size())
         {
-            const size_type index = m_components.size();
-            m_dense.push_back(entity);
-            m_components.push_back(component);
-            m_sparse.emplace(entity, index);
+            m_sparse.resize(index + 1, invalid_index());
         }
+
+        m_sparse[index] = m_dense.size();
+        m_dense.push_back(entity);
+        m_values.push_back(component);
+
+        return true;
     }
 
     ////////////////////////////////////////////////////////////
-    void remove(const Entity& entity)
+    void remove(Entity entity)
     {
-        auto it = m_sparse.find(entity);
+        assert(has(entity) && "Entity does not exist in SparseSet");
 
-        if(it == m_sparse.end())
+        const size_type dense_index = m_sparse[Entities::index(entity)];
+        const size_type last_index = m_dense.size() - 1;
+
+        if(dense_index != last_index)
         {
-            return;
+            const auto last_entity = m_dense[last_index];
+
+            m_dense[dense_index] = last_entity;
+            m_values[dense_index] = std::move(m_values[last_index]);
+
+            m_sparse[Entities::index(last_entity)] = dense_index;
         }
 
-        const size_type index = it->second;
-        const Entity&   lastEntity = m_dense.back();
-
-        m_dense[index] = lastEntity;
-        m_components[index] = m_components.back();
-
-        m_sparse[lastEntity] = index;
         m_dense.pop_back();
-        m_components.pop_back();
-        m_sparse.erase(it);
+        m_values.pop_back();
+        m_sparse[Entities::index(entity)] = invalid_index();
     }
 
     ////////////////////////////////////////////////////////////
-    bool has(const Entity& entity) const
+    bool has(Entity entity) const
     {
-        return m_sparse.find(entity) != m_sparse.end();
+        const size_type index = Entities::index(entity);
+        return index < m_sparse.size() &&
+               m_sparse[index] != invalid_index() &&
+               m_dense[m_sparse[index]] == entity;
     }
 
     ////////////////////////////////////////////////////////////
-    Component& get(const Entity& entity)
-    {
-        assert(has(entity) && "Entity does not exist in SparseSet");
-        return m_components[m_sparse.at(entity)];
-    }
-
-    ////////////////////////////////////////////////////////////
-    const Component& get(const Entity& entity) const
+    Component& get(Entity entity)
     {
         assert(has(entity) && "Entity does not exist in SparseSet");
-        return m_components[m_sparse.at(entity)];
+        return m_values[m_sparse[Entities::index(entity)]];
+    }
+
+    ////////////////////////////////////////////////////////////
+    const Component& get(Entity entity) const
+    {
+        assert(has(entity) && "Entity does not exist in SparseSet");
+        return m_values[m_sparse[Entities::index(entity)]];
+    }
+
+    ////////////////////////////////////////////////////////////
+    void clear()
+    {
+        m_sparse = {};
+        m_dense = {};
+        m_values = {};
     }
 
     ////////////////////////////////////////////////////////////
     size_type size() const
     {
-        return m_components.size();
+        return m_values.size();
     }
 
     ////////////////////////////////////////////////////////////
     bool empty() const
     {
-        return m_components.empty();
+        return m_values.empty();
     }
 
     ////////////////////////////////////////////////////////////
@@ -129,15 +148,15 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    const std::vector<Component>& components() const
+    const std::vector<Component>& values() const
     {
-        return m_components;
+        return m_values;
     }
 
     ////////////////////////////////////////////////////////////
-    std::vector<Component>& components()
+    std::vector<Component>& values()
     {
-        return m_components;
+        return m_values;
     }
 
     ////////////////////////////////////////////////////////////
@@ -148,7 +167,7 @@ public:
 
         bool operator!=(const Iterator& other) const { return index != other.index; }
         void operator++() { ++index; }
-        auto operator*() { return std::tie(set->m_dense[index], set->m_components[index]); }
+        auto operator*() { return std::tie(set->m_dense[index], set->m_values[index]); }
     };
 
     ////////////////////////////////////////////////////////////
@@ -165,13 +184,17 @@ public:
 
 private:
     ////////////////////////////////////////////////////////////
+    static constexpr size_type invalid_index()
+    {
+        return static_cast<size_type>(-1);
+    }
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unordered_map<Entity, size_type> m_sparse;
-    std::vector<Entity>                   m_dense;
-    std::vector<Component>                m_components;
+    std::vector<size_type> m_sparse;
+    std::vector<Entity>    m_dense;
+    std::vector<Component> m_values;
 };
 
 } // namespace CNtity
-
-#endif // SPARSESET_HPP

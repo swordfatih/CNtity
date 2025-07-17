@@ -26,7 +26,7 @@ int main()
     auto cntity = [](int entityCount, int iterationCount, int probability)
     {
         using namespace CNtity;
-        Helper helper;
+        Helper<int, std::string> helper;
         std::cout << "CNtity | entity: " << entityCount << " iteration: " << iterationCount << std::endl;
 
         {
@@ -44,64 +44,68 @@ int main()
             }
         }
 
-        {
-            Timer timer("For_each entities one component: ");
-            std::uint64_t sum = 0;
+        // {
+        //     Timer timer("For_each entities one component: ");
+        //     std::uint64_t sum = 0;
 
-            auto view = helper.view<int>();
+        //     auto view = helper.entities<int>();
 
-            for(int i = 0; i < iterationCount; ++i)
-            {
-                view.each([&](auto& ent, auto& num)
-                {
-                    sum += num;
-                });
-            }
-        }
+        //     for(int i = 0; i < iterationCount; ++i)
+        //     {
+        //         view.each([&](auto& ent, auto& num)
+        //         {
+        //             sum += num;
+        //         });
+        //     }
+        // }
 
-        {
-            Timer timer("For_each entities two component: ");
-            std::uint64_t sum = 0;
+        // {
+        //     Timer timer("For_each entities two component: ");
+        //     std::uint64_t sum = 0;
 
-            auto view = helper.view<int, std::string>();
+        //     auto view = helper.entities<int, std::string>();
             
-            for(int i = 0; i < iterationCount; ++i)
-            {
-                view.each([&](auto& ent, auto& num, auto& name)
-                {
-                    sum += num;
-                });
-            }
-        }
+        //     for(int i = 0; i < iterationCount; ++i)
+        //     {
+        //         view.each([&](auto& ent, auto& num, auto& name)
+        //         {
+        //             sum += num;
+        //         });
+        //     }
+        // }
 
         {
             Timer timer("Acquire entities one component: ");
             std::uint64_t sum = 0;
 
-            auto view = helper.view<int>();
+            auto view = helper.entities<int>();
 
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num]: view.each())
+                for(auto [entity, num]: view)
                 {
                     sum += num;
                 };
             }
+
+            std::cout << sum << std::endl;
         }
 
         {
             Timer timer("Acquire entities two component: ");
             std::uint64_t sum = 0;
 
-            auto view = helper.view<int, std::string>();
+            auto view = helper.entities<int, std::string>();
 
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num, _]: view.each())
+                for(auto [entity, num, _]: view)
                 {
                     sum += num;
                 };
             }
+
+            std::cout << sum << std::endl;
         }
 
         std::cout << "____________________________" << std::endl;
