@@ -1,23 +1,18 @@
 cmake_minimum_required(VERSION 3.14)
-project(CNtity LANGUAGES CXX)
 
+# ---- project ----
+set(CNTITY_VERSION 3.0.0)
+project(CNtity VERSION ${CNTITY_VERSION} LANGUAGES CXX)
+
+# ---- library ----
 add_library(CNtity INTERFACE)
 target_include_directories(CNtity INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(CNtity INTERFACE cxx_std_17)
 
 # ---- examples ----
 option(CNTITY_BUILD_EXAMPLES "Build CNtity example executables" OFF)
-option(CNTITY_BUILD_TESTS "Build the CNtity test suite" OFF)
 
 if(CNTITY_BUILD_EXAMPLES)
-    include(FetchContent)
-    FetchContent_Declare(
-        Catch2
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG v3.8.1
-    )
-    FetchContent_MakeAvailable(Catch2)
-
     file(GLOB EXAMPLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/examples/*/main.cpp")
 
     foreach(EXAMPLE_FILE ${EXAMPLE_FILES})
@@ -29,6 +24,9 @@ if(CNTITY_BUILD_EXAMPLES)
         target_compile_features(${EXAMPLE_NAME}_example PRIVATE cxx_std_17)
     endforeach()
 endif()
+
+# ---- tests ----
+option(CNTITY_BUILD_TESTS "Build the CNtity test suite" OFF)
 
 if (CNTITY_BUILD_TESTS)
     include(CTest)

@@ -86,7 +86,7 @@ int main()
 
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num]: view.each())
+                for(auto [entity, num]: view)
                 {
                     sum += num;
                 };
@@ -103,7 +103,7 @@ int main()
 
             for(int i = 0; i < iterationCount; ++i)
             {
-                for(auto [entity, num, _]: view.each())
+                for(auto [entity, num, _]: view)
                 {
                     sum += num;
                 };

@@ -5,6 +5,22 @@
 
 using namespace CNtity;
 
+TEST_CASE("View loop works inline", "[View]")
+{
+    Helper helper;
+    auto   entity1 = helper.create(Position{1, 1}, Velocity{2, 2});
+    auto   entity2 = helper.create(Position{3, 3});
+
+    int counter = 0;
+    for(auto&& [entity, position, velocity]: helper.view<Position, Velocity>())
+    {
+        ++counter;
+        REQUIRE(position == Position{1, 1});
+        REQUIRE(velocity == Velocity{2, 2});
+    }
+    REQUIRE(counter == 1);
+}
+
 TEST_CASE("View updates when components are added or removed", "[View]")
 {
     Helper helper;
@@ -13,30 +29,30 @@ TEST_CASE("View updates when components are added or removed", "[View]")
     auto   view = helper.view<Position, Velocity>();
 
     int counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE((p == Position{1, 1} || p == Position{3, 3}));
-        REQUIRE(v == Velocity{2, 2});
+        REQUIRE(position == Position{1, 1});
+        REQUIRE(velocity == Velocity{2, 2});
     });
     REQUIRE(counter == 1);
 
     helper.add<Velocity>(entity2, Velocity{4, 4});
     counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE((p == Position{1, 1} || p == Position{3, 3}));
+        REQUIRE((position == Position{1, 1} || position == Position{3, 3}));
     });
     REQUIRE(counter == 2);
 
     helper.remove<Velocity>(entity1);
     counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE(p == Position{3, 3});
-        REQUIRE(v == Velocity{4, 4});
+        REQUIRE(position == Position{3, 3});
+        REQUIRE(velocity == Velocity{4, 4});
     });
     REQUIRE(counter == 1);
 }
@@ -49,11 +65,11 @@ TEST_CASE("View reflects entity duplication", "[View]")
     auto   view = helper.view<Position, Velocity>();
 
     int counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE(p == Position{5, 6});
-        REQUIRE(v == Velocity{1, 1});
+        REQUIRE(position == Position{5, 6});
+        REQUIRE(velocity == Velocity{1, 1});
     });
     REQUIRE(counter == 2);
 }
@@ -66,20 +82,20 @@ TEST_CASE("View updates after removing entities", "[View]")
     auto   view = helper.view<Position, Velocity>();
 
     int counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE((p == Position{1, 1} || p == Position{2, 2}));
+        REQUIRE((position == Position{1, 1} || position == Position{2, 2}));
     });
     REQUIRE(counter == 2);
 
     helper.remove(entity1);
     counter = 0;
-    view.each([&](Entity, Position& p, Velocity& v)
+    view.each([&](Entity, Position& position, Velocity& velocity)
     {
         ++counter;
-        REQUIRE(p == Position{2, 2});
-        REQUIRE(v == Velocity{3, 3});
+        REQUIRE(position == Position{2, 2});
+        REQUIRE(velocity == Velocity{3, 3});
     });
     REQUIRE(counter == 1);
 }
