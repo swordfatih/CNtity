@@ -1,111 +1,132 @@
 # CNtity
 
-CNtity is a type-safe header-only library which provides simple and useful features for an Entity Component System (ECS) application using C++17.
+CNtity is a type-safe, header-only library which provides simple and useful features for building an **Entity Component System (ECS)** in C++17.
 
 ---
 
 ## How to install
 
-CNtity is a header-only library, you just need a compiler that supports C++17 and to include `CNtity/Helper.hpp` after downloading files in the include directory.
+CNtity is a header-only library, so installation is straightforward.
+
+1. Download the files and place them in your include folder.
+2. Include the main header in your project: `#include <CNtity/Helper.hpp>`
 
 ## Getting started
 
-CNtity is thought to be very intuitive and simple to use.
+CNtity is designed to be intuitive and simple to use.
 
-You will be able to easily do everything, from managing a single entity and its components, to iterate through every entities associated to components inside your systems.
+You can do everything from managing a single entity and its components to iterating through thousands of entities inside your systems.
 
 ### Create and manage an entity and its components
 
-Here are the basic functions to create an entity, add components to it, get its components and modify the values of the components.
+Here are the basic functions to create an entity, add components to it, and retrieve or modify those components.
 
 ```cpp
-struct Health { int max, current };
-struct Position { float x, y };
+struct Health { int max, current; };
+struct Position { float x, y; };
 
 CNtity::Helper helper;
 
-// create a cat with components, these can be of any type
+// create an entity (a "cat") with components (any type is allowed)
 auto cat = helper.create<std::string, Health, int>("cat", {100, 80}, 0);
 
 // add a component afterwards
 auto [position] = helper.add<Position>(cat, {50, 50});
-position.x += 50;
+position.x += 50; // modify the component directly
 
-// get the components associated to an entity
-if(auto values = helper.get_if<Health, std::string>(cat))
+// safely get components (if they exist)
+if (auto values = helper.get_if<Health, std::string>(cat))
 {
-    auto [health, name] = *values; // access components inside the tuple
+    auto [health, name] = *values;
     health.current += 5;
 }
 ```
 
 ### Iterate over entities
 
-You will for sure want to retrieve all the entities containing one or more components. To do so, you can create a View which will be automatically, or not, updated by the helper.
+You will likely want to iterate through all entities containing one or more specific components.
+You can do this by creating a `View`.
 
 ```cpp
-CNtity::View<std::string, Position> view{helper}; // same as: auto view = helper.view<std::string, Position>();
+auto view = helper.view<std::string, Position>();
+// same as: CNtity::View<std::string, Position> view{helper};
 
 // for each callback
 view.each([](auto entity, auto& position) {
     position.x += 10;
 });
 
-// range based loop
-for(auto [entity, position]: view.each())
+// range-based loop
+for(auto [entity, position]: view)
 {
     position.x += 10;
 }
 ```
 
-### Visit components, (de)serialization
+> All components are accessed by reference, so modifications are applied directly.
 
-Sometimes, you need to do an operation on many components of an entity in a generic way, for example to serialize it.
+### Visit components (generic operations and serialization)
 
-You may do this by visiting the entity on selected components in a type-safe manner. The component types that the entity doesn't have will be ignored.
+Sometimes, you need to operate on multiple components of an entity in a generic way, for example for saving or loading them.
 
-**Index components**
+You can visit components in a type-safe manner. Components that the entity doesn't have are simply ignored.
+
+**Index component**
+
+Before serializing, you can associate components with unique string identifiers.
+
 ```cpp
 struct Position
 {
     float x, y;
 
-    std::string serialize() {};
-    void deserialize(std::string data) {};
+    std::string serialize();
+    void deserialize(const std::string& data);
 };
 
 struct Health
 {
-    float x, y;
+    int max, current;
 
-    std::string serialize() {};
-    void deserialize(std::string data) {};
+    std::string serialize();
+    void deserialize(const std::string& data);
 };
 
-helper.index<Position, Health>("position", "health"); // associate an unique ID to components for (de)serialization
+helper.index<Position, Health>("position", "health");
 ```
 
 **Serialization**
+
 ```cpp
-helper.visit<Position, Health>(cat, [](auto component, auto index)
+helper.visit<Position, Health>(cat, [](auto& component, auto index)
 {
-    auto data = component.serialize(); // save data and index to a file
+    auto data = component.serialize(); // save data with its index
 });
 ```
 
 **Deserialization**
-```cpp
-std::string index, data; // load data and index from a file
 
-helper.visit<Position, Health>(cat, index, [&data](auto component)
+```cpp
+std::string index, data; // loaded from file
+
+helper.visit<Position, Health>(cat, index, [&data](auto& component)
 {
     component.deserialize(data);
 });
 ```
 
+--- 
+
 ### Full example
 
-Checkout the following example codes, which can also be found inside the `examples` folder, to get an overview of most features.
+Check out the examples inside the examples folder for more complete use cases.
+You can build them with CMake by enabling the option:
 
-Ofcourse, you will be able to make more complex programs (e.g, creating classes for your systems).
-CNtity's best point is that it isn't forcing some "architecture" on your application.
+```bash
+cmake -DCNTITY_BUILD_EXAMPLES=ON ..
+```
+
+---
+
+CNtity's best point is that it doesn't enforce any strict "architecture" on your application.
+You are free to organize your systems and components however you want.

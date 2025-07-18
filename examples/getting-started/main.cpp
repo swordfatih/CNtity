@@ -49,8 +49,8 @@ int main()
     });
 
     // View
-    // or: auto view = helper.view<std::string, Position>();
-    CNtity::View<std::string, Position> view{helper};
+    // or: CNtity::View<std::string, Position> view{helper};
+    auto view = helper.view<std::string, Position>();
 
     // System 1
     view.each([](const auto& entity, const auto& name, auto& position)
@@ -59,7 +59,7 @@ int main()
     });
 
     // System 2
-    for(auto [entity, name, position]: view.each())
+    for(auto [entity, name, position]: view)
     {
         if(name == "chat")
         {

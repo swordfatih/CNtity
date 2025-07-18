@@ -1,4 +1,5 @@
 #include "CNtity/Helper.hpp"
+
 #include "Components.hpp"
 
 #include <algorithm>
@@ -43,7 +44,7 @@ TEST_CASE("Create() creates entities and populates components", "[Helper][create
         REQUIRE(vel2 == vel);
     }
 
-    SECTION("Non‑existent component is reported correctly")
+    SECTION("Non-existent component is reported correctly")
     {
         REQUIRE_FALSE(helper.has<Health>(entity1));
         REQUIRE_FALSE(helper.get_if<Health>(entity1).has_value());

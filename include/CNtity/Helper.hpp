@@ -28,15 +28,14 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include "Entity.hpp"
-#include "Pool.hpp"
+#include "EntitySet.hpp"
 
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <typeindex>
 #include <unordered_map>
+#include <vector>
 
 namespace CNtity
 {
@@ -48,6 +47,11 @@ class View;
 ////////////////////////////////////////////////////////////
 /// \brief Wrapper class to associate a string to a type
 ///
+/// Used to bind a textual index (e.g. for (de)serialization)
+/// to a component type through Helper::index().
+///
+/// \tparam Component Component type to be indexed
+///
 ////////////////////////////////////////////////////////////
 template <typename Component>
 class Index : public std::string_view
@@ -56,8 +60,22 @@ class Index : public std::string_view
 };
 
 ////////////////////////////////////////////////////////////
-/// \brief Class that contains helper functions for an Entity
-/// Component System architecture
+/// \brief Core utility / facade for the ECS storage
+///
+/// Holds:
+/// - Component pools (one per distinct component type)
+/// - The entity allocator / recycler (EntitySet)
+/// - Index mappings (string -> component type) for (de)serialization
+/// - View subscriptions (weak flags marking cached views dirty)
+///
+/// Provides:
+/// - Creation / destruction of entities
+/// - Addition / removal / querying of components
+/// - Visiting components by type or by string index
+/// - Duplication of entities
+/// - Construction of snapshot or filtering views
+///
+/// \note Not thread-safe.
 ///
 ////////////////////////////////////////////////////////////
 class Helper
@@ -65,7 +83,6 @@ class Helper
 public:
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
-    ///
     ////////////////////////////////////////////////////////////
     Helper() : m_pools(), m_entities()
     {
@@ -73,7 +90,6 @@ public:
 
     ////////////////////////////////////////////////////////////
     /// \brief Default destructor
-    ///
     ////////////////////////////////////////////////////////////
     ~Helper()
     {
@@ -82,8 +98,8 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get registered components
     ///
-    /// \return type_index of every registered components in an
-    /// array
+    /// \return A vector containing the std::type_index of every
+    /// registered component pool
     ///
     ////////////////////////////////////////////////////////////
     std::vector<std::type_index> components() const
@@ -99,6 +115,16 @@ public:
         return components;
     }
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Get (and lazily create) the component pool for a type
+    ///
+    /// Lazily allocates a ComponentSet<Component> if it does not
+    /// already exist, then returns a reference to it.
+    ///
+    /// \tparam Component Component type whose pool is requested
+    ///
+    /// \return Reference to the ComponentSet<Component>
+    ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
     ComponentSet<Component>& pool()
@@ -116,7 +142,8 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get all the entities
     ///
-    /// \return Unique identifier of every entities in a vector
+    /// \return Constant reference to the vector containing the
+    /// unique identifiers of all entities
     ///
     ////////////////////////////////////////////////////////////
     const std::vector<Entity>& entities()
@@ -125,38 +152,12 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get all the entities associated to given components
-    ///
-    /// \tparam Components to look for entities in
-    ///
-    /// \return Unique identifier of every entities in a vector
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename... Components>
-    std::vector<std::tuple<Entity, Components&...>> entities()
-    {
-        std::vector<std::tuple<Entity, Components&...>> entities;
-
-        auto& smallest = smallest_pool<Components...>();
-        entities.reserve(smallest.size());
-
-        for(auto& entity: smallest.entities())
-        {
-            if(has<Components...>(entity))
-            {
-                entities.emplace_back(entity, pool<Components>().get(entity)...);
-            }
-        }
-
-        return entities;
-    }
-
-    ////////////////////////////////////////////////////////////
     /// \brief Create an entity and add components to it
     ///
-    /// \param components Components to add
+    /// \tparam Components Component types to add
+    /// \param components Component instances to add
     ///
-    /// \return Created entity
+    /// \return The created entity identifier
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -172,7 +173,9 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Check if a given entity identifier exists
     ///
-    /// \param entity Entity
+    /// \param entity Entity identifier
+    ///
+    /// \return True if the entity currently exists, false otherwise
     ///
     ////////////////////////////////////////////////////////////
     bool match(Entity entity)
@@ -183,11 +186,18 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Add components to a specified entity
     ///
-    /// \param entity Entity
-    /// \param components Instances of components
-    /// \tparam Components to add
+    /// Existing components of the same types are replaced /
+    /// overwritten according to the underlying ComponentSet
+    /// semantics.
     ///
-    /// \return Tuple containing added components
+    /// Also marks subscribed views for those component types
+    /// as dirty.
+    ///
+    /// \tparam Components Component types to add
+    /// \param entity Entity identifier
+    /// \param components Instances of the components to add
+    ///
+    /// \return Tuple containing references to the added components
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -202,8 +212,13 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Remove components from a specified entity
     ///
-    /// \param entity Entity to remove components from
-    /// \tparam Components to remove
+    /// Silently does nothing for missing components.
+    ///
+    /// Marks subscribed views observing these component types
+    /// as dirty.
+    ///
+    /// \tparam Components Component types to remove
+    /// \param entity Entity identifier
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -216,7 +231,9 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Remove a specified entity and all its components
     ///
-    /// \param entity Entity
+    /// Marks all views for every component pool touched.
+    ///
+    /// \param entity Entity identifier
     ///
     ////////////////////////////////////////////////////////////
     void remove(Entity entity)
@@ -224,16 +241,19 @@ public:
         for(auto& [id, pool]: m_pools)
         {
             pool->remove(entity);
-            notify(id);
+            notify(id, entity);
         }
 
         m_entities.remove(entity);
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Remove specified components from all entities
+    /// \brief Remove specified component types from all entities
     ///
-    /// \tparam Components to remove
+    /// Destroys the entire pools for the provided component types.
+    /// Subscribed views for these pools are marked dirty.
+    ///
+    /// \tparam Components Component types to remove globally
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -244,12 +264,13 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Check if an entity contains specified components
+    /// \brief Check if an entity contains all specified components
     ///
-    /// \param entity Entity
-    /// \tparam Components to look for
+    /// \tparam Components Component types to test
+    /// \param entity Entity identifier
     ///
-    /// \return True if the entity has the component
+    /// \return True only if the entity has *all* the requested
+    /// component types
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -261,13 +282,13 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get components associated to an entity
     ///
-    /// Throws an exception if the entity doesn't have the
-    /// specified components.
+    /// \tparam Components Component types to retrieve
+    /// \param entity Entity identifier
     ///
-    /// \param entity The entity to look components for
-    /// \tparam Components to look for
+    /// \return Tuple of references to the components
     ///
-    /// \return Tuple of components
+    /// \throws (Implementation defined) if the entity does not
+    /// have one of the requested components
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -277,13 +298,13 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get components associated to an entity
+    /// \brief Try to get components associated to an entity
     ///
-    /// \param entity The entity to search look for
-    /// \tparam Components to look for
+    /// \tparam Components Component types to retrieve
+    /// \param entity Entity identifier
     ///
-    /// \return An optional containing a tuple of components if
-    /// found, nullopt if not found
+    /// \return std::optional containing a tuple of component
+    /// references if all are present, std::nullopt otherwise
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -295,13 +316,13 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get one component associated to an entity
     ///
-    /// Throws an exception if the entity doesn't have the
-    /// specified components.
-    ///
-    /// \param entity The entity to look components for
-    /// \tparam Component to look for
+    /// \tparam Component Component type to retrieve
+    /// \param entity Entity identifier
     ///
     /// \return Reference to the component
+    ///
+    /// \throws (Implementation defined) if the entity does not
+    /// have the component
     ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
@@ -311,15 +332,18 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Visit components associated to a specified
-    /// entity for given possible components
+    /// \brief Visit components associated to a specified entity
+    /// for given possible component types
     ///
-    /// You may give more or less component types than what the
-    /// entity really has.
+    /// If the entity has a component among the candidate types,
+    /// invokes the visitor either as visitor(Component&) or
+    /// visitor(Component&, optionalIndexString) depending on
+    /// invocability.
     ///
-    /// \param entity Entity
-    /// \param visitor Visitor function
-    /// \tparam Possible components to visit
+    /// \tparam Components Candidate component types
+    /// \tparam Function Visitor callable
+    /// \param entity Entity identifier
+    /// \param visitor Callable
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
@@ -342,21 +366,17 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Visit a component of an entity by its index
+    /// \brief Visit a component of an entity by its string index
     ///
-    /// Visit a component of an entity by its index for given
-    /// possible types.
-    /// Adds a new component to the entity if it doesn't have
-    /// a given component. The component has to be default
-    /// constructible.
-    /// This function is useful for (de)serialization.
+    /// For each candidate type, if its registered string index
+    /// matches \p index ensures the component exists (default
+    /// constructed if absent) then invokes visitor(Component&).
     ///
-    /// \param entity Entity
-    /// \param index Index of the component
-    /// \param visitor Visitor function
-    /// \tparam Possible components to visit
-    ///
-    /// \see index
+    /// \tparam Components Candidate component types
+    /// \tparam Function Visitor callable
+    /// \param entity Entity identifier
+    /// \param index String index
+    /// \param visitor Callable
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components, typename Function>
@@ -377,11 +397,13 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Associate indexes to components for (de)serialization
+    /// \brief Associate string indexes to component types
     ///
-    /// \param index Indexes to associate, in the same orders as
-    /// components
-    /// \tparam Components to associate
+    /// Registers mappings used for reflective / serialized
+    /// access through the index-based visit().
+    ///
+    /// \tparam Components Component types
+    /// \param index Index tokens (string views)
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -391,11 +413,15 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Copy components of an entity to another
+    /// \brief Copy components of an entity to a newly created entity
+    ///
+    /// Only components present on the source entity are copied.
+    /// Subscribed views for copied component types are marked
+    /// dirty.
     ///
     /// \param source Source entity
-    /// \param destination Destination entity, creates a new one
-    /// if not specified.
+    ///
+    /// \return Destination entity with copied components
     ///
     ////////////////////////////////////////////////////////////
     Entity duplicate(Entity source)
@@ -407,7 +433,7 @@ public:
             if(pool->has(source))
             {
                 pool->copy(source, destination);
-                notify(id);
+                notify(id, destination);
             }
         }
 
@@ -415,10 +441,31 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Add view to views-to-notify lists
+    /// \brief Create a view associated to the current helper
     ///
-    /// Create an observer weak pointer for every
-    /// components associated to a view.
+    /// Returns a snapshot-style view (new View<Components...>).
+    ///
+    /// \tparam Components Component types required by the view
+    ///
+    /// \return View object
+    ///
+    ////////////////////////////////////////////////////////////
+    template <typename... Components>
+    View<Components...> view()
+    {
+        return View<Components...>(*this);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Subscribe a view to this helper so it gets
+    /// notified automatically when components change
+    ///
+    /// Adds a weak pointer entry for each observed component
+    /// type; when those component pools change the view is
+    /// marked dirty.
+    ///
+    /// \tparam Components Component types observed by the view
+    /// \param view View to subscribe
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -428,27 +475,46 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Create a view associated to the current helper
+    /// \brief Get all the entities associated to given components
     ///
-    /// Shortcut function to create a view associated to
-    /// the current helper instance observing specified
-    /// components.
+    /// Builds a vector of (Entity, Components&...) for entities
+    /// that possess all requested component types, iterating
+    /// from the smallest pool.
     ///
-    /// \code
-    /// auto view = helper.view<std::string>();
-    /// \endcode
+    /// \tparam Components Component types required
+    ///
+    /// \return Vector of tuples
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
-    View<Components...> view()
+    std::vector<std::tuple<Entity, Components&...>> entities()
     {
-        return View<Components...>(*this);
+        std::vector<std::tuple<Entity, Components&...>> entities;
+
+        auto& smallest = smallest_pool<Components...>();
+        entities.reserve(smallest.size());
+
+        for(auto& entity: smallest.entities())
+        {
+            if(has<Components...>(entity))
+            {
+                entities.emplace_back(entity, pool<Components>().get(entity)...);
+            }
+        }
+
+        return entities;
     }
 
 private:
     ////////////////////////////////////////////////////////////
-    /// \brief Get the component containing the least amount of
-    /// entities
+    /// \brief Get the component pool containing the least
+    /// number of entities among the provided component types
+    ///
+    /// Used to optimize multi-component iteration.
+    ///
+    /// \tparam Components Component types to compare
+    ///
+    /// \return Reference to smallest IComponentSet
     ///
     ////////////////////////////////////////////////////////////
     template <typename... Components>
@@ -460,9 +526,14 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Notify all views observing given components
+    /// \brief Notify all views observing given component type
     ///
-    /// \param component Type index of the component.
+    /// Cleans up expired weak pointers and sets the dirty flag
+    /// for active observers so that their snapshots are
+    /// rebuilt lazily.
+    ///
+    /// \param component Component type_index key
+    /// \param entity (Unused) entity that triggered the change
     ///
     ////////////////////////////////////////////////////////////
     void notify(const std::type_index& component, Entity entity = {})
@@ -483,12 +554,11 @@ private:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the string index associated to a component
-    /// by it's type
+    /// \brief Get the string index associated to a component type
     ///
-    /// \tparam Component to get index for
+    /// \tparam Component Component type
     ///
-    /// \return Optional index
+    /// \return Optional string index
     ///
     ////////////////////////////////////////////////////////////
     template <typename Component>
@@ -508,113 +578,13 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unordered_map<std::type_index, std::unique_ptr<IComponentSet>> m_pools;    ///< Component pools
-    Entities                                                            m_entities; ///< Entities
-    std::map<std::type_index, std::vector<std::weak_ptr<bool>>>         m_views;    ///< Views
-    std::map<std::string, std::type_index>                              m_indexes;  ///< Component indexes
-};
-
-////////////////////////////////////////////////////////////
-/// \brief Wrapper class to store and iterate over entities
-/// which contain specified components
-///
-/// \tparam Components for entities to have
-///
-////////////////////////////////////////////////////////////
-template <typename... Components>
-class View
-{
-public:
-    ////////////////////////////////////////////////////////////
-    /// \brief Constructor to associate the view to a helper
-    ///
-    /// \param helper The associated helper
-    /// \param subscribe If false, the helper wont update this view
-    /// automatically. Defaults to true.
-    ///
-    ////////////////////////////////////////////////////////////
-    View(Helper& helper, bool subscribe = true) : m_helper(helper), m_update(std::make_shared<bool>(true))
-    {
-        if(subscribe)
-        {
-            m_helper.subscribe(*this);
-        }
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Default destructor
-    ///
-    ////////////////////////////////////////////////////////////
-    ~View()
-    {
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Retrieve entities from the helper
-    ///
-    ////////////////////////////////////////////////////////////
-    void update()
-    {
-        m_entities = std::move(m_helper.entities<Components...>());
-        *m_update = false;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Execute a callback for every entities that
-    /// contain specified components
-    ///
-    /// \param callback Function to call for each entities
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename Function>
-    void each(Function&& callback)
-    {
-        if(*m_update)
-        {
-            update();
-        }
-
-        for(auto&& components: m_entities)
-        {
-            std::apply(callback, components);
-        }
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get entities that contains specified components
-    ///
-    /// \return Array of tuples containing the entity's identifier
-    /// and specified components
-    ///
-    ////////////////////////////////////////////////////////////
-    std::vector<std::tuple<Entity, Components&...>>& each()
-    {
-        if(*m_update)
-        {
-            update();
-        }
-
-        return m_entities;
-    }
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Update a weak pointer with the update boolean
-    ///
-    /// \param observer Weak pointer to update
-    ///
-    ////////////////////////////////////////////////////////////
-    void observe(std::weak_ptr<bool>& observer)
-    {
-        observer = m_update;
-    }
-
-private:
-    ////////////////////////////////////////////////////////////
-    // Member data
-    ////////////////////////////////////////////////////////////
-    Helper&                                         m_helper;
-    std::vector<std::tuple<Entity, Components&...>> m_entities;
-    std::shared_ptr<bool>                           m_update;
+    std::unordered_map<std::type_index, std::unique_ptr<IComponentSet>>   m_pools;    ///< Component pools keyed by typeid
+    EntitySet                                                             m_entities; ///< Entity allocator / storage
+    std::unordered_map<std::string, std::type_index>                      m_indexes;  ///< String index -> component type
+    std::unordered_map<std::type_index, std::vector<std::weak_ptr<bool>>> m_views;    ///< Component type -> observers (dirty flags)
 };
 
 } // namespace CNtity
+
+////////////////////////////////////////////////////////////
+#include "View.hpp"

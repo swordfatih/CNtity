@@ -25,15 +25,33 @@
 
 #pragma once
 
-#include "Component.hpp"
+#include "ComponentSet.hpp"
 
 namespace CNtity
 {
 
-
-class Entities
+////////////////////////////////////////////////////////////
+/// \brief Manages allocation, recycling and validation of entities
+///
+/// Entity identifiers are composed of two slices (index
+/// and generation) packed together. Destroyed entity indices
+/// are recycled; their generation counters are incremented
+/// so stale identifiers can be detected as invalid.
+///
+////////////////////////////////////////////////////////////
+class EntitySet
 {
 public:
+    ////////////////////////////////////////////////////////////
+    /// \brief Create (allocate) a new entity
+    ///
+    /// Reuses an index from the depot if available; otherwise
+    /// appends a new index with generation 0. The resulting
+    /// identifier is inserted into an internal ComponentSet
+    /// for fast existence queries.
+    ///
+    /// \return Newly created entity identifier
+    ///
     ////////////////////////////////////////////////////////////
     Entity create()
     {
@@ -58,12 +76,28 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
-    bool
-    has(Entity entity) const
+    /// \brief Check if an entity currently exists
+    ///
+    /// \param entity Entity identifier
+    ///
+    /// \return True if the entity is alive (allocated and not removed)
+    ///
+    ////////////////////////////////////////////////////////////
+    bool has(Entity entity) const
     {
         return m_entities.has(entity);
     }
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Destroy (remove) an entity
+    ///
+    /// Increments the generation counter associated with the
+    /// entity's index, recycles the index by pushing it into
+    /// the depot, and erases the entity from the internal set.
+    /// Passing an already invalid / stale entity is ignored.
+    ///
+    /// \param entity Entity identifier
+    ///
     ////////////////////////////////////////////////////////////
     void remove(Entity entity)
     {
@@ -76,11 +110,21 @@ public:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get immutable view of living entities
+    ///
+    /// \return Const reference to dense vector of entities
+    ///
+    ////////////////////////////////////////////////////////////
     const std::vector<Entity>& entities() const
     {
         return m_entities.entities();
     }
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Get mutable view of living entities
+    ///
+    /// \return Reference to dense vector of entities
+    ///
     ////////////////////////////////////////////////////////////
     std::vector<Entity>& entities()
     {
@@ -89,15 +133,25 @@ public:
 
 private:
     ////////////////////////////////////////////////////////////
+    /// \brief Pack index and generation into an Entity identifier
+    ///
+    /// \param index Entity index
+    /// \param generation Generation counter
+    ///
+    /// \return Packed entity identifier
+    ///
+    ////////////////////////////////////////////////////////////
     static Entity make_entity(EntitySlice index, EntitySlice generation)
     {
         return (static_cast<Entity>(generation) << (sizeof(EntitySlice) * 8)) | index;
     }
 
     ////////////////////////////////////////////////////////////
-    std::vector<EntitySlice> m_generations; ///< Generation per index
-    std::vector<EntitySlice> m_depot;       ///< Available indexes
-    ComponentSet<uint8_t>    m_entities;    ///< Existing entities
+    // Member data
+    ////////////////////////////////////////////////////////////
+    std::vector<EntitySlice> m_generations; ///< Generation per index (increments on recycle)
+    std::vector<EntitySlice> m_depot;       ///< Recycled (free) indices
+    ComponentSet<uint8_t>    m_entities;    ///< Set of currently alive entities (value payload unused)
 };
 
 } // namespace CNtity
