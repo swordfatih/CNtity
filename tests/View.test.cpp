@@ -8,8 +8,8 @@ using namespace CNtity;
 TEST_CASE("View loop works inline", "[View]")
 {
     Helper helper;
-    auto   entity1 = helper.create(Position{1, 1}, Velocity{2, 2});
-    auto   entity2 = helper.create(Position{3, 3});
+    helper.create(Position{1, 1}, Velocity{2, 2});
+    helper.create(Position{3, 3});
 
     int counter = 0;
     for(auto&& [entity, position, velocity]: helper.view<Position, Velocity>())
@@ -39,7 +39,7 @@ TEST_CASE("View updates when components are added or removed", "[View]")
 
     helper.add<Velocity>(entity2, Velocity{4, 4});
     counter = 0;
-    view.each([&](Entity, Position& position, Velocity& velocity)
+    view.each([&](Entity, Position& position, Velocity&)
     {
         ++counter;
         REQUIRE((position == Position{1, 1} || position == Position{3, 3}));
@@ -61,7 +61,7 @@ TEST_CASE("View reflects entity duplication", "[View]")
 {
     Helper helper;
     auto   entity1 = helper.create(Position{5, 6}, Velocity{1, 1});
-    auto   entity2 = helper.duplicate(entity1);
+    helper.duplicate(entity1);
     auto   view = helper.view<Position, Velocity>();
 
     int counter = 0;
@@ -78,11 +78,11 @@ TEST_CASE("View updates after removing entities", "[View]")
 {
     Helper helper;
     auto   entity1 = helper.create(Position{1, 1}, Velocity{2, 2});
-    auto   entity2 = helper.create(Position{2, 2}, Velocity{3, 3});
-    auto   view = helper.view<Position, Velocity>();
+    helper.create(Position{2, 2}, Velocity{3, 3});
+    auto view = helper.view<Position, Velocity>();
 
     int counter = 0;
-    view.each([&](Entity, Position& position, Velocity& velocity)
+    view.each([&](Entity, Position& position, Velocity&)
     {
         ++counter;
         REQUIRE((position == Position{1, 1} || position == Position{2, 2}));

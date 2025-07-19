@@ -46,6 +46,12 @@ if (CNTITY_BUILD_TESTS)
     target_include_directories(CNtity_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/include)
     target_link_libraries(CNtity_tests PRIVATE CNtity Catch2::Catch2WithMain)
 
+    if (MSVC)
+        target_compile_options(CNtity_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(CNtity_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+
     include(Catch)
     catch_discover_tests(CNtity_tests)
 endif()
