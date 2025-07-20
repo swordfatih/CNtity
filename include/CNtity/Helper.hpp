@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
 // CNtity - Chats Noirs Entity Component System Helper
-// Copyright (c) 2018 - 2025 Fatih (accfldekur@gmail.com)
+// Copyright (c) 2018 - 2025 swordfatih
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -91,9 +91,27 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Default destructor
     ////////////////////////////////////////////////////////////
-    ~Helper()
-    {
-    }
+    ~Helper() = default;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Deleted copy constructor
+    ////////////////////////////////////////////////////////////
+    Helper(const Helper&) = delete;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Deleted copy assignment
+    ////////////////////////////////////////////////////////////
+    Helper& operator=(const Helper&) = delete;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default move constructor
+    ////////////////////////////////////////////////////////////
+    Helper(Helper&&) = default;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default move assignment
+    ////////////////////////////////////////////////////////////
+    Helper& operator=(Helper&&) = default;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get registered components
@@ -165,7 +183,10 @@ public:
     {
         Entity entity = m_entities.create();
 
-        add(entity, components...);
+        if constexpr(sizeof...(Components) > 0)
+        {
+            add(entity, components...);
+        }
 
         return entity;
     }
@@ -204,7 +225,7 @@ public:
     std::tuple<Components&...> add(Entity entity, const Components&... components)
     {
         (pool<Components>().insert(entity, components), ...);
-        (notify(typeid(Components), entity), ...);
+        (notify(typeid(Components)), ...);
 
         return get<Components...>(entity);
     }
@@ -225,7 +246,7 @@ public:
     void remove(Entity entity)
     {
         (pool<Components>().remove(entity), ...);
-        (notify(typeid(Components), entity), ...);
+        (notify(typeid(Components)), ...);
     }
 
     ////////////////////////////////////////////////////////////
@@ -241,7 +262,7 @@ public:
         for(auto& [id, pool]: m_pools)
         {
             pool->remove(entity);
-            notify(id, entity);
+            notify(id);
         }
 
         m_entities.remove(entity);
@@ -433,7 +454,7 @@ public:
             if(pool->has(source))
             {
                 pool->copy(source, destination);
-                notify(id, destination);
+                notify(id);
             }
         }
 
@@ -536,7 +557,7 @@ private:
     /// \param entity (Unused) entity that triggered the change
     ///
     ////////////////////////////////////////////////////////////
-    void notify(const std::type_index& component, Entity entity = {})
+    void notify(const std::type_index& component)
     {
         auto& observers = m_views[component];
         for(auto it = observers.begin(); it != observers.end();)

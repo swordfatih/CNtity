@@ -123,7 +123,7 @@ TEST_CASE("remove(Entity) eliminates entity and all its components", "[Helper][r
 TEST_CASE("components() returns all registered component typeids", "[Helper][components]")
 {
     Helper helper;
-    auto   entity1 = helper.create(Position{1, 1});
+    helper.create(Position{1, 1});
     auto   entity2 = helper.create();
     helper.add<Velocity>(entity2, Velocity{2.f, 2.f});
 
@@ -139,7 +139,7 @@ TEST_CASE("entities<>() returns tuples of matching entities & components", "[Hel
     Helper helper;
 
     auto entity1 = helper.create(Position{1, 1}, Velocity{1.f, 1.f});
-    auto entity2 = helper.create(Position{2, 2});
+    helper.create(Position{2, 2});
 
     auto list = helper.entities<Position, Velocity>();
     REQUIRE(list.size() == 1);
